@@ -5,7 +5,7 @@ import cloudinary.api
 
 app = Flask(__name__)
 
-# Cloudinary Config (Aapki Details)
+# Cloudinary Config
 cloudinary.config(
   cloud_name = "dawterffe",
   api_key = "258318685843824",
@@ -19,7 +19,7 @@ HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Jiotube - Atif Khan</title>
+    <title>JioTube Pro - Atif Khan</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.6.2/axios.min.js"></script>
     <style>
@@ -32,15 +32,15 @@ HTML_TEMPLATE = """
         input { width: 90%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; }
         #progress-wrapper { display: none; margin-top: 10px; }
         #progress-bar-bg { background: #eee; border-radius: 10px; height: 20px; width: 100%; overflow: hidden; }
-        #progress-bar-fill { background: #0078d7; height: 100%; width: 0%; transition: 0.2s; }
-        #status { font-size: 15px; font-weight: bold; margin-top: 5px; }
+        #progress-bar-fill { background: #28a745; height: 100%; width: 0%; transition: 0.2s; }
+        #status { font-size: 15px; font-weight: bold; margin-top: 5px; color: #0078d7; }
     </style>
 </head>
 <body>
     <h3 align="center" style="color:#0078d7;">JioTube Pro - Atif Khan</h3>
     
     <div style="background:white; padding:15px; border-radius:10px; margin-bottom:15px; text-align:center; border: 2px solid #0078d7;">
-        <b>🚀 Heavy Video Uploader (Unsigned)</b><br><br>
+        <b>🚀 Heavy Video Uploader (200MB+ OK)</b><br><br>
         <input type="file" id="fileInput"><br>
         <input type="text" id="nameInput" placeholder="Video ka naam..."><br>
         <button onclick="startUpload()" class="btn btn-watch">UPLOAD NOW</button>
@@ -77,7 +77,7 @@ HTML_TEMPLATE = """
     async function startUpload() {
         const file = document.getElementById('fileInput').files[0];
         const name = document.getElementById('nameInput').value;
-        if(!file) return alert("File chunein!");
+        if(!file) return alert("Pehle video select karein!");
 
         document.getElementById('progress-wrapper').style.display = 'block';
         const status = document.getElementById('status');
@@ -85,45 +85,53 @@ HTML_TEMPLATE = """
 
         const cloudName = "dawterffe";
         const unsignedPreset = "ml_default";
-
-        // Direct Upload to Cloudinary (Render bypass)
         const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
 
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("upload_preset", unsignedPreset);
-        if(name) formData.append("public_id", name);
+        const chunkSize = 6 * 1024 * 1024; 
+        const totalChunks = Math.ceil(file.size / chunkSize);
+        const uniqueUploadId = 'atif_' + Date.now();
 
-        try {
-            const res = await axios.post(url, formData, {
-                onUploadProgress: (p) => {
-                    const percent = Math.round((p.loaded * 100) / p.total);
-                    fill.style.width = percent + "%";
-                    status.innerText = "Uploading: " + percent + "%";
-                }
-            });
-            status.innerText = "Mubarak ho! Upload Success.";
-            setTimeout(() => location.reload(), 2000);
-        } catch (err) {
-            console.error(err);
-            alert("Upload Fail! Check if ml_default is set to Unsigned in Cloudinary.");
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(file.size, start + chunkSize);
+            const chunk = file.slice(start, end);
+
+            const formData = new FormData();
+            formData.append("file", chunk);
+            formData.append("upload_preset", unsignedPreset);
+            if(name) formData.append("public_id", name);
+            
+            const contentRange = `bytes ${start}-${end - 1}/${file.size}`;
+
+            try {
+                await axios.post(url, formData, {
+                    headers: {
+                        'X-Unique-Upload-Id': uniqueUploadId,
+                        'Content-Range': contentRange
+                    }
+                });
+                const percent = Math.round((end * 100) / file.size);
+                fill.style.width = percent + "%";
+                status.innerText = "Uploading: " + percent + "%";
+            } catch (err) {
+                alert("Upload Fail! Check Internet.");
+                return;
+            }
         }
+        status.innerText = "Upload Mubarak! Refresh ho raha hai...";
+        setTimeout(() => location.reload(), 2000);
     }
     </script>
 </body>
 </html>
 """
 
-# Search aur Delete routes waise hi rahenge
 @app.route('/')
 def index():
     search_query = request.args.get('q')
     cursor = request.args.get('next_cursor')
     try:
-        if search_query:
-            res = cloudinary.api.resources(resource_type="video", type="upload", prefix=search_query, max_results=10, next_cursor=cursor)
-        else:
-            res = cloudinary.api.resources(resource_type="video", type="upload", max_results=10, next_cursor=cursor)
+        res = cloudinary.api.resources(resource_type="video", type="upload", prefix=search_query if search_query else None, max_results=10, next_cursor=cursor)
         videos, nxt = res.get('resources', []), res.get('next_cursor')
     except: videos, nxt = [], None
     return render_template_string(HTML_TEMPLATE, videos=videos, next_cursor=nxt, query=search_query)
@@ -141,5 +149,6 @@ def confirm_del():
         return "Deleted! <a href='/'>Back</a>"
     return "Wrong Password!"
 
+# YE RAHA AAPKA PORT WALA HISSA (SABSE LAST MEIN)
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

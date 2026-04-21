@@ -16,7 +16,7 @@ cloudinary.config(
 
 ADMIN_PASSWORD = "809047"
 
-# --- HTML Template with JavaScript Progress Bar ---
+# --- HTML Template ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -31,8 +31,6 @@ HTML_TEMPLATE = """
         .btn-watch { background: #0078d7; }
         .btn-del { background: #28a745; }
         input[type="text"], input[type="file"] { width: 95%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        
-        /* Progress Bar Styling */
         #upload-container { background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
         #progress-wrapper { display: none; margin-top: 10px; }
         #progress-bar-bg { background: #eee; border-radius: 10px; height: 20px; width: 100%; overflow: hidden; }
@@ -45,9 +43,9 @@ HTML_TEMPLATE = """
     
     <div id="upload-container">
         <form id="upload-form">
-            <b>Upload & Rename:</b><br><br>
+            <b>Fast Upload:</b><br><br>
             <input type="file" id="fileInput" name="file" required><br>
-            <input type="text" id="nameInput" name="filename" placeholder="Naya naam likhein..."><br>
+            <input type="text" id="nameInput" name="filename" placeholder="Video Name..."><br>
             <button type="button" onclick="uploadVideo()" class="btn btn-watch" style="font-size:14px;">Upload Start</button>
         </form>
 
@@ -55,12 +53,12 @@ HTML_TEMPLATE = """
             <div id="progress-bar-bg">
                 <div id="progress-bar-fill"></div>
             </div>
-            <div id="status-text">Uploading: 0%</div>
+            <div id="status-text">Speeding up: 0%</div>
         </div>
     </div>
 
     <form action="/" method="get" style="text-align:center; margin-bottom:20px;">
-        <input type="text" name="q" placeholder="Video khojein..." style="width:60%; padding:8px;">
+        <input type="text" name="q" placeholder="Search..." style="width:60%; padding:8px;">
         <button type="submit" style="padding:8px;">Search</button>
     </form>
 
@@ -69,19 +67,13 @@ HTML_TEMPLATE = """
         <div class="card">
             <img src="{{ v.secure_url.replace('.mp4', '.jpg').replace('.mkv', '.jpg') }}" class="thumb">
             <p style="font-size:11px; height:30px; overflow:hidden;"><b>{{ v.public_id }}</b></p>
-            <a href="{{ v.secure_url }}" class="btn btn-watch">Download / Watch</a>
+            <a href="{{ v.secure_url }}" class="btn btn-watch">Watch</a>
             <form action="/delete-page" method="get">
                 <input type="hidden" name="public_id" value="{{ v.public_id }}">
-                <button type="submit" class="btn btn-del">Delete Video</button>
+                <button type="submit" class="btn btn-del">Delete</button>
             </form>
         </div>
         {% endfor %}
-    </div>
-
-    <div align="center" style="margin-top:20px;">
-        {% if next_cursor %}
-            <a href="/?next_cursor={{ next_cursor }}"><button style="padding:10px;">Next Page >> </button></a>
-        {% endif %}
     </div>
 
     <script>
@@ -92,10 +84,7 @@ HTML_TEMPLATE = """
         const fill = document.getElementById('progress-bar-fill');
         const status = document.getElementById('status-text');
 
-        if (fileInput.files.length === 0) {
-            alert("File select karein!");
-            return;
-        }
+        if (fileInput.files.length === 0) return alert("Select Video!");
 
         const formData = new FormData();
         formData.append("file", fileInput.files[0]);
@@ -104,51 +93,38 @@ HTML_TEMPLATE = """
         const xhr = new XMLHttpRequest();
         xhr.open("POST", "/upload", true);
 
-        // Progress event
-        xhr.upload.onprogress = function(e) {
+        xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
                 const percent = Math.round((e.loaded / e.total) * 100);
                 wrapper.style.display = 'block';
                 fill.style.width = percent + '%';
-                status.innerText = "Uploading: " + percent + "%";
+                status.innerText = "Speeding up: " + percent + "%";
             }
         };
 
-        xhr.onload = function() {
+        xhr.onload = () => {
             if (xhr.status === 200) {
-                status.innerText = "Upload Complete! Refreshing...";
+                status.innerText = "Success! Refreshing...";
                 setTimeout(() => { location.reload(); }, 1500);
-            } else {
-                alert("Upload failed!");
-            }
+            } else { alert("Upload Failed!"); }
         };
-
         xhr.send(formData);
     }
     </script>
-
-    <div align="center" style="background:#333; color:white; padding:15px; margin-top:20px; border-radius:5px;">
-        Developed by <b>Atif Khan</b>
-    </div>
 </body>
 </html>
 """
 
+# Is page ka code main.py ke niche hi rehne dega
 DELETE_PAGE_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head><title>Delete Panel</title><meta name="viewport" content="width=device-width, initial-scale=1"></head>
-<body style="font-family:sans-serif; text-align:center; padding:50px;">
-    <h3>Admin Delete Panel</h3>
-    <p>Video: <b>{{ public_id }}</b></p>
+<body style="text-align:center; padding:50px; font-family:sans-serif;">
+    <h3>Admin Delete</h3>
     <form action="/confirm-delete" method="post">
         <input type="hidden" name="public_id" value="{{ public_id }}">
-        <input type="password" name="password" placeholder="Admin Password" required style="padding:10px;"><br><br>
-        <button type="submit" style="background:red; color:white; padding:10px 20px; border:none; border-radius:5px;">Confirm Delete</button>
+        <input type="password" name="password" placeholder="Pass: 809047" required style="padding:10px;"><br><br>
+        <button type="submit" style="background:red; color:white; padding:10px;">Confirm Delete</button>
     </form>
-    <br><a href="/">Back</a>
 </body>
-</html>
 """
 
 @app.route('/')
@@ -171,7 +147,13 @@ def upload_file():
     file = request.files.get('file')
     name = request.form.get('filename')
     if file:
-        cloudinary.uploader.upload(file, resource_type="video", public_id=name if name else None)
+        # CHUNK UPLOAD ENABLED FOR SPEED
+        cloudinary.uploader.upload_large(
+            file, 
+            resource_type="video", 
+            public_id=name if name else None,
+            chunk_size=6000000 # 6MB chunks for faster processing
+        )
         return jsonify({"status": "success"})
     return jsonify({"status": "error"}), 400
 
@@ -186,8 +168,8 @@ def confirm_delete():
     pw = request.form.get('password')
     if pw == ADMIN_PASSWORD:
         cloudinary.uploader.destroy(pid, resource_type="video")
-        return "<h3>Deleted!</h3><a href='/'>Wapas Jayein</a>"
-    return "<h3>Wrong Password!</h3><a href='/'>Wapas Jayein</a>"
+        return "<h3>Deleted!</h3><a href='/'>Back</a>"
+    return "<h3>Wrong!</h3>"
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

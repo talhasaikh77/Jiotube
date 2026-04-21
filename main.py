@@ -1,12 +1,11 @@
 import os
 from flask import Flask, request, render_template_string, jsonify
 import cloudinary
-import cloudinary.uploader
 import cloudinary.api
 
 app = Flask(__name__)
 
-# --- Cloudinary Configuration ---
+# Cloudinary Config
 cloudinary.config(
   cloud_name = "dawterffe",
   api_key = "258318685843824",
@@ -16,7 +15,6 @@ cloudinary.config(
 
 ADMIN_PASSWORD = "809047"
 
-# --- HTML Template ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -25,152 +23,97 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { font-family: sans-serif; background: #f4f4f4; margin: 0; padding: 10px; }
-        .card { background: white; margin: 10px; padding: 10px; border-radius: 8px; width: 150px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: inline-block; vertical-align: top; }
-        .thumb { width: 100%; height: 100px; object-fit: cover; border-radius: 5px; }
+        .card { background: white; margin: 10px; padding: 10px; border-radius: 8px; width: 140px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: inline-block; vertical-align: top; }
+        .thumb { width: 100%; height: 90px; object-fit: cover; border-radius: 5px; }
         .btn { text-decoration: none; display: block; margin: 5px 0; padding: 6px; border-radius: 4px; font-size: 12px; color: white; border: none; cursor: pointer; width: 100%; text-align:center; }
         .btn-watch { background: #0078d7; }
         .btn-del { background: #28a745; }
-        input[type="text"], input[type="file"] { width: 95%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        #upload-container { background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; }
+        input { width: 95%; padding: 8px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; }
         #progress-wrapper { display: none; margin-top: 10px; }
-        #progress-bar-bg { background: #eee; border-radius: 10px; height: 20px; width: 100%; overflow: hidden; }
-        #progress-bar-fill { background: #28a745; height: 100%; width: 0%; transition: width 0.2s; }
-        #status-text { font-size: 14px; color: #333; margin-top: 5px; text-align: center; }
+        #progress-bar-bg { background: #eee; border-radius: 10px; height: 15px; width: 100%; overflow: hidden; }
+        #progress-bar-fill { background: #28a745; height: 100%; width: 0%; }
     </style>
 </head>
 <body>
     <h3 align="center" style="color:#0078d7;">Atif Khan Video Manager</h3>
     
-    <div id="upload-container">
-        <form id="upload-form">
-            <b>Fast Upload:</b><br><br>
-            <input type="file" id="fileInput" name="file" required><br>
-            <input type="text" id="nameInput" name="filename" placeholder="Video Name..."><br>
-            <button type="button" onclick="uploadVideo()" class="btn btn-watch" style="font-size:14px;">Upload Start</button>
-        </form>
-
+    <div style="background:white; padding:15px; border-radius:8px; margin-bottom:15px;">
+        <b>Upload Large Video (Up to 500MB):</b><br><br>
+        <input type="file" id="fileInput"><br>
+        <input type="text" id="nameInput" placeholder="Naya naam..."><br>
+        <button onclick="startUpload()" class="btn btn-watch" style="font-size:14px;">Upload Start</button>
+        
         <div id="progress-wrapper">
-            <div id="progress-bar-bg">
-                <div id="progress-bar-fill"></div>
-            </div>
-            <div id="status-text">Speeding up: 0%</div>
+            <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
+            <div id="status" style="font-size:12px; text-align:center;">0%</div>
         </div>
     </div>
-
-    <form action="/" method="get" style="text-align:center; margin-bottom:20px;">
-        <input type="text" name="q" placeholder="Search..." style="width:60%; padding:8px;">
-        <button type="submit" style="padding:8px;">Search</button>
-    </form>
 
     <div align="center">
         {% for v in videos %}
         <div class="card">
             <img src="{{ v.secure_url.replace('.mp4', '.jpg').replace('.mkv', '.jpg') }}" class="thumb">
-            <p style="font-size:11px; height:30px; overflow:hidden;"><b>{{ v.public_id }}</b></p>
+            <p style="font-size:10px; height:25px; overflow:hidden;">{{ v.public_id }}</p>
             <a href="{{ v.secure_url }}" class="btn btn-watch">Watch</a>
-            <form action="/delete-page" method="get">
-                <input type="hidden" name="public_id" value="{{ v.public_id }}">
-                <button type="submit" class="btn btn-del">Delete</button>
-            </form>
+            <a href="/delete-page?pid={{ v.public_id }}" class="btn btn-del">Delete</a>
         </div>
         {% endfor %}
     </div>
 
     <script>
-    function uploadVideo() {
-        const fileInput = document.getElementById('fileInput');
-        const nameInput = document.getElementById('nameInput');
-        const wrapper = document.getElementById('progress-wrapper');
-        const fill = document.getElementById('progress-bar-fill');
-        const status = document.getElementById('status-text');
+    function startUpload() {
+        const file = document.getElementById('fileInput').files[0];
+        const name = document.getElementById('nameInput').value;
+        if(!file) return alert("File chunein!");
 
-        if (fileInput.files.length === 0) return alert("Select Video!");
-
-        const formData = new FormData();
-        formData.append("file", fileInput.files[0]);
-        formData.append("filename", nameInput.value);
+        const url = "https://api.cloudinary.com/v1_1/dawterffe/video/upload";
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("upload_preset", "ml_default"); // Make sure this is enabled in Cloudinary
+        if(name) fd.append("public_id", name);
 
         const xhr = new XMLHttpRequest();
-        xhr.open("POST", "/upload", true);
+        xhr.open("POST", url, true);
+        
+        document.getElementById('progress-wrapper').style.display = 'block';
 
         xhr.upload.onprogress = (e) => {
-            if (e.lengthComputable) {
-                const percent = Math.round((e.loaded / e.total) * 100);
-                wrapper.style.display = 'block';
-                fill.style.width = percent + '%';
-                status.innerText = "Speeding up: " + percent + "%";
-            }
+            const percent = Math.round((e.loaded / e.total) * 100);
+            document.getElementById('progress-bar-fill').style.width = percent + '%';
+            document.getElementById('status').innerText = percent + "% Uploading...";
         };
 
         xhr.onload = () => {
-            if (xhr.status === 200) {
-                status.innerText = "Success! Refreshing...";
-                setTimeout(() => { location.reload(); }, 1500);
-            } else { alert("Upload Failed!"); }
+            alert("Upload Successful!");
+            location.reload();
         };
-        xhr.send(formData);
+        xhr.send(fd);
     }
     </script>
 </body>
 </html>
 """
 
-# Is page ka code main.py ke niche hi rehne dega
-DELETE_PAGE_TEMPLATE = """
-<body style="text-align:center; padding:50px; font-family:sans-serif;">
-    <h3>Admin Delete</h3>
-    <form action="/confirm-delete" method="post">
-        <input type="hidden" name="public_id" value="{{ public_id }}">
-        <input type="password" name="password" placeholder="Pass: 809047" required style="padding:10px;"><br><br>
-        <button type="submit" style="background:red; color:white; padding:10px;">Confirm Delete</button>
-    </form>
-</body>
-"""
-
 @app.route('/')
 def index():
-    next_cursor = request.args.get('next_cursor')
-    search_query = request.args.get('q')
     try:
-        if search_query:
-            res = cloudinary.api.resources(resource_type="video", type="upload", prefix=search_query, max_results=10, next_cursor=next_cursor)
-        else:
-            res = cloudinary.api.resources(resource_type="video", type="upload", max_results=10, next_cursor=next_cursor)
+        res = cloudinary.api.resources(resource_type="video", type="upload", max_results=10)
         videos = res.get('resources', [])
-        nxt = res.get('next_cursor')
-    except:
-        videos, nxt = [], None
-    return render_template_string(HTML_TEMPLATE, videos=videos, next_cursor=nxt)
-
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    file = request.files.get('file')
-    name = request.form.get('filename')
-    if file:
-        # CHUNK UPLOAD ENABLED FOR SPEED
-        cloudinary.uploader.upload_large(
-            file, 
-            resource_type="video", 
-            public_id=name if name else None,
-            chunk_size=6000000 # 6MB chunks for faster processing
-        )
-        return jsonify({"status": "success"})
-    return jsonify({"status": "error"}), 400
+    except: videos = []
+    return render_template_string(HTML_TEMPLATE, videos=videos)
 
 @app.route('/delete-page')
 def delete_page():
-    public_id = request.args.get('public_id')
-    return render_template_string(DELETE_PAGE_TEMPLATE, public_id=public_id)
+    pid = request.args.get('pid')
+    return render_template_string('<h3>Delete {{pid}}?</h3><form action="/confirm-del" method="post"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="809047"><button type="submit">Delete</button></form>', pid=pid)
 
-@app.route('/confirm-delete', methods=['POST'])
-def confirm_delete():
-    pid = request.form.get('public_id')
-    pw = request.form.get('password')
-    if pw == ADMIN_PASSWORD:
-        cloudinary.uploader.destroy(pid, resource_type="video")
-        return "<h3>Deleted!</h3><a href='/'>Back</a>"
-    return "<h3>Wrong!</h3>"
+@app.route('/confirm-del', methods=['POST'])
+def confirm_del():
+    if request.form.get('pw') == ADMIN_PASSWORD:
+        import cloudinary.uploader
+        cloudinary.uploader.destroy(request.form.get('pid'), resource_type="video")
+        return "Deleted! <a href='/'>Back</a>"
+    return "Wrong Password!"
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

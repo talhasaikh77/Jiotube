@@ -1,7 +1,6 @@
 import os
-from flask import Flask, request, render_template_string, jsonify
+from flask import Flask, request, render_template_string
 import cloudinary
-import cloudinary.uploader
 import cloudinary.api
 
 app = Flask(__name__)
@@ -20,8 +19,9 @@ HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>JioTube Signed - Atif Khan</title>
+    <title>JioTube Unsigned - Atif Khan</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.6.2/axios.min.js"></script>
     <style>
         body { font-family: sans-serif; background: #f4f4f4; margin: 0; padding: 10px; }
         .card { background: white; margin: 15px auto; padding: 15px; border-radius: 10px; width: 92%; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
@@ -30,25 +30,24 @@ HTML_TEMPLATE = """
         .btn-watch { background: #0078d7; }
         .btn-del { background: #28a745; }
         input { width: 90%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; }
-        #progress-wrapper { display: none; margin-top: 10px; background:white; padding:10px; border-radius:10px; border:1px solid #0078d7; }
+        #progress-wrapper { display: none; margin-top: 10px; }
         #progress-bar-bg { background: #eee; border-radius: 10px; height: 20px; width: 100%; overflow: hidden; }
-        #progress-bar-fill { background: #0078d7; height: 100%; width: 0%; transition: 0.3s; }
-        .nav-btns { display: flex; justify-content: center; gap: 10px; margin-top: 20px; padding-bottom: 30px; }
-        .page-btn { background: #333; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; }
+        #progress-bar-fill { background: #28a745; height: 100%; width: 0%; transition: 0.2s; }
+        #status { font-size: 14px; font-weight: bold; margin-top: 5px; color: #0078d7; }
     </style>
 </head>
 <body>
-    <h3 align="center" style="color:#0078d7;">JioTube Signed Pro</h3>
+    <h3 align="center" style="color:#0078d7;">JioTube Unsigned Pro</h3>
     
-    <div style="background:white; padding:15px; border-radius:10px; margin-bottom:15px; text-align:center;">
-        <b>🔐 Secure Heavy Upload (Signed)</b><br><br>
+    <div style="background:white; padding:15px; border-radius:10px; margin-bottom:15px; text-align:center; border: 2px solid #0078d7;">
+        <b>🚀 Direct Unsigned Upload (No-Limit)</b><br><br>
         <input type="file" id="fileInput"><br>
-        <input type="text" id="nameInput" placeholder="Video Name..."><br>
-        <button onclick="startUpload()" class="btn btn-watch">UPLOAD START</button>
+        <input type="text" id="nameInput" placeholder="Video ka naam..."><br>
+        <button onclick="startUpload()" class="btn btn-watch">UPLOAD NOW</button>
         
         <div id="progress-wrapper">
             <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
-            <div id="status" style="font-size:13px; margin-top:5px;">Taiyari...</div>
+            <div id="status">Taiyari...</div>
         </div>
     </div>
 
@@ -61,53 +60,52 @@ HTML_TEMPLATE = """
         {% for v in videos %}
         <div class="card">
             <img src="{{ v.secure_url.replace('.mp4', '.jpg').replace('.mkv', '.jpg') }}" class="thumb">
-            <h4>{{ v.public_id }}</h4>
+            <h4 style="margin: 10px 0;">{{ v.public_id }}</h4>
             <a href="{{ v.secure_url }}" class="btn btn-watch">Watch / Download</a>
             <a href="/delete-page?pid={{ v.public_id }}" class="btn btn-del">Delete</a>
         </div>
         {% endfor %}
     </div>
 
-    <div class="nav-btns">
+    <div style="text-align:center; padding:20px;">
         {% if next_cursor %}
-            <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" class="page-btn">Next Page >></a>
-        {% else %}
-            <span style="color:gray;">End of List</span>
+            <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" style="background:#333; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Next Page >></a>
         {% endif %}
     </div>
 
     <script>
-    function startUpload() {
+    async function startUpload() {
         const file = document.getElementById('fileInput').files[0];
         const name = document.getElementById('nameInput').value;
-        if(!file) return alert("File chunein!");
+        if(!file) return alert("Pehle video chunein!");
 
         document.getElementById('progress-wrapper').style.display = 'block';
         const status = document.getElementById('status');
         const fill = document.getElementById('progress-bar-fill');
 
+        const cloudName = "dawterffe";
+        const unsignedPreset = "ml_default";
+        const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
+
         const formData = new FormData();
-        formData.append('file', file);
-        formData.append('filename', name);
+        formData.append("file", file);
+        formData.append("upload_preset", unsignedPreset);
+        if(name) formData.append("public_id", name);
 
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/upload', true);
-
-        xhr.upload.onprogress = (e) => {
-            const percent = Math.round((e.loaded / e.total) * 100);
-            fill.style.width = percent + '%';
-            status.innerText = "Processing: " + percent + "%";
-        };
-
-        xhr.onload = () => {
-            if (xhr.status === 200) {
-                status.innerText = "Done! Refreshing...";
-                setTimeout(() => location.reload(), 1500);
-            } else {
-                alert("Upload Failed! Check Cloudinary Signed Settings.");
-            }
-        };
-        xhr.send(formData);
+        try {
+            await axios.post(url, formData, {
+                onUploadProgress: (p) => {
+                    const percent = Math.round((p.loaded * 100) / p.total);
+                    fill.style.width = percent + "%";
+                    status.innerText = "Uploading: " + percent + "%";
+                }
+            });
+            status.innerText = "Mubarak! Success.";
+            setTimeout(() => location.reload(), 2000);
+        } catch (err) {
+            console.error(err);
+            alert("Upload Fail! Confirm karein ki 'ml_default' Unsigned hai.");
+        }
     }
     </script>
 </body>
@@ -119,27 +117,10 @@ def index():
     search_query = request.args.get('q')
     cursor = request.args.get('next_cursor')
     try:
-        # max_results=10 set kiya hai taaki page lamba na ho
         res = cloudinary.api.resources(resource_type="video", type="upload", prefix=search_query if search_query else None, max_results=10, next_cursor=cursor)
-        videos = res.get('resources', [])
-        nxt = res.get('next_cursor')
-    except: 
-        videos, nxt = [], None
+        videos, nxt = res.get('resources', []), res.get('next_cursor')
+    except: videos, nxt = [], None
     return render_template_string(HTML_TEMPLATE, videos=videos, next_cursor=nxt, query=search_query)
-
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    file = request.files.get('file')
-    name = request.form.get('filename')
-    if file:
-        cloudinary.uploader.upload_large(
-            file, 
-            resource_type="video",
-            public_id=name if name else None,
-            chunk_size=6000000 
-        )
-        return jsonify({"status": "ok"})
-    return "No file", 400
 
 @app.route('/delete-page')
 def delete_page():
@@ -149,6 +130,7 @@ def delete_page():
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():
     if request.form.get('pw') == ADMIN_PASSWORD:
+        import cloudinary.uploader
         cloudinary.uploader.destroy(request.form.get('pid'), resource_type="video")
         return "Deleted! <a href='/'>Back</a>"
     return "Wrong!"

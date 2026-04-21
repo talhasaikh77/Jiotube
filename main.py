@@ -24,7 +24,7 @@ HTML_TEMPLATE = """
     <style>
         body { font-family: sans-serif; background: #f4f4f4; margin: 0; padding: 10px; }
         .card { background: white; margin: 15px auto; padding: 15px; border-radius: 10px; width: 92%; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .thumb { width: 100%; height: auto; max-height: 200px; object-fit: cover; border-radius: 8px; }
+        .thumb { width: 100%; height: auto; max-height: 200px; object-fit: cover; border-radius: 8px; background: #000; }
         .btn { text-decoration: none; display: block; margin: 10px 0; padding: 12px; border-radius: 5px; font-size: 14px; color: white; border: none; cursor: pointer; width: 100%; text-align:center; font-weight: bold; }
         .btn-watch { background: #0078d7; }
         .btn-del { background: #28a745; }
@@ -57,12 +57,18 @@ HTML_TEMPLATE = """
     <div align="center">
         {% for v in videos %}
         <div class="card">
-            <img src="{{ v.secure_url.replace('.mp4', '.jpg').replace('.mkv', '.jpg') }}" class="thumb">
+            <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/300x150?text=Processing...';">
             <h4 style="margin: 10px 0;">{{ v.public_id }}</h4>
             <a href="{{ v.secure_url }}" class="btn btn-watch">Watch / Download</a>
             <a href="/delete-page?pid={{ v.public_id }}" class="btn btn-del">Delete</a>
         </div>
         {% endfor %}
+    </div>
+
+    <div style="text-align:center; padding:20px;">
+        {% if next_cursor %}
+            <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" style="background:#333; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; font-weight:bold;">Next Page >></a>
+        {% endif %}
     </div>
 
     <script>
@@ -108,7 +114,7 @@ HTML_TEMPLATE = """
                 fill.style.width = percent + "%";
                 status.innerText = "Progress: " + percent + "%";
             } catch (err) {
-                alert("Upload Error! Check Dashboard.");
+                alert("Upload Error!");
                 return;
             }
         }
@@ -126,8 +132,10 @@ def index():
     cursor = request.args.get('next_cursor')
     try:
         res = cloudinary.api.resources(resource_type="video", type="upload", prefix=search_query if search_query else None, max_results=10, next_cursor=cursor)
-        videos, nxt = res.get('resources', []), res.get('next_cursor')
-    except: videos, nxt = [], None
+        videos = res.get('resources', [])
+        nxt = res.get('next_cursor')
+    except:
+        videos, nxt = [], None
     return render_template_string(HTML_TEMPLATE, videos=videos, next_cursor=nxt, query=search_query)
 
 @app.route('/delete-page')
@@ -143,6 +151,7 @@ def confirm_del():
         return "Deleted! <a href='/'>Back</a>"
     return "Wrong!"
 
+# --- PORT SETTING PHIR SE DAL DI HAI ---
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)

@@ -19,7 +19,7 @@ HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>JioTube Unsigned - Atif Khan</title>
+    <title>JioTube Pro - Atif Khan</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.6.2/axios.min.js"></script>
     <style>
@@ -30,29 +30,28 @@ HTML_TEMPLATE = """
         .btn-watch { background: #0078d7; }
         .btn-del { background: #28a745; }
         input { width: 90%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; }
-        #progress-wrapper { display: none; margin-top: 10px; }
-        #progress-bar-bg { background: #eee; border-radius: 10px; height: 20px; width: 100%; overflow: hidden; }
+        #progress-wrapper { display: none; margin-top: 10px; background:white; padding:10px; border-radius:10px; }
+        #progress-bar-bg { background: #eee; border-radius: 10px; height: 15px; width: 100%; overflow: hidden; }
         #progress-bar-fill { background: #28a745; height: 100%; width: 0%; transition: 0.2s; }
-        #status { font-size: 14px; font-weight: bold; margin-top: 5px; color: #0078d7; }
     </style>
 </head>
 <body>
-    <h3 align="center" style="color:#0078d7;">JioTube Unsigned Pro</h3>
+    <h3 align="center" style="color:#0078d7;">JioTube Pro - Atif Khan</h3>
     
     <div style="background:white; padding:15px; border-radius:10px; margin-bottom:15px; text-align:center; border: 2px solid #0078d7;">
-        <b>🚀 Direct Unsigned Upload (No-Limit)</b><br><br>
+        <b>🚀 Heavy Video Uploader (80MB+ Fix)</b><br><br>
         <input type="file" id="fileInput"><br>
         <input type="text" id="nameInput" placeholder="Video ka naam..."><br>
         <button onclick="startUpload()" class="btn btn-watch">UPLOAD NOW</button>
         
         <div id="progress-wrapper">
             <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
-            <div id="status">Taiyari...</div>
+            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Starting...</div>
         </div>
     </div>
 
-    <form action="/" method="get" style="text-align:center; margin-bottom:20px;">
-        <input type="text" name="q" value="{{ query if query else '' }}" placeholder="Search Video..." style="width:70%;">
+    <form action="/" method="get" style="text-align:center; margin-bottom:15px;">
+        <input type="text" name="q" placeholder="Video khojein..." style="width:60%;">
         <button type="submit" style="padding:10px; background:#333; color:white; border:none; border-radius:5px;">Search</button>
     </form>
 
@@ -77,7 +76,7 @@ HTML_TEMPLATE = """
     async function startUpload() {
         const file = document.getElementById('fileInput').files[0];
         const name = document.getElementById('nameInput').value;
-        if(!file) return alert("Pehle video chunein!");
+        if(!file) return alert("Select Video!");
 
         document.getElementById('progress-wrapper').style.display = 'block';
         const status = document.getElementById('status');
@@ -87,31 +86,49 @@ HTML_TEMPLATE = """
         const unsignedPreset = "ml_default";
         const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
 
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("upload_preset", unsignedPreset);
-        if(name) formData.append("public_id", name);
+        // CHUNKING LOGIC: 6MB ke tukde
+        const chunkSize = 6 * 1024 * 1024;
+        const totalChunks = Math.ceil(file.size / chunkSize);
+        const uniqueId = "atif_" + Math.random().toString(36).substring(2, 10);
 
-        try {
-            await axios.post(url, formData, {
-                onUploadProgress: (p) => {
-                    const percent = Math.round((p.loaded * 100) / p.total);
-                    fill.style.width = percent + "%";
-                    status.innerText = "Uploading: " + percent + "%";
-                }
-            });
-            status.innerText = "Mubarak! Success.";
-            setTimeout(() => location.reload(), 2000);
-        } catch (err) {
-            console.error(err);
-            alert("Upload Fail! Confirm karein ki 'ml_default' Unsigned hai.");
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(file.size, start + chunkSize);
+            const chunk = file.slice(start, end);
+
+            const formData = new FormData();
+            formData.append("file", chunk);
+            formData.append("upload_preset", unsignedPreset);
+            if(name) formData.append("public_id", name);
+            
+            // Ye header Cloudinary ko batata hai ki ye "Chunked" upload hai
+            const contentRange = `bytes ${start}-${end - 1}/${file.size}`;
+
+            try {
+                await axios.post(url, formData, {
+                    headers: {
+                        "X-Unique-Upload-Id": uniqueId,
+                        "Content-Range": contentRange
+                    }
+                });
+                const percent = Math.round((end / file.size) * 100);
+                fill.style.width = percent + "%";
+                status.innerText = "Processing Part " + (i+1) + "/" + totalChunks + " (" + percent + "%)";
+            } catch (err) {
+                console.error(err);
+                alert("Upload Failed! Check if ml_default is Unsigned.");
+                return;
+            }
         }
+        status.innerText = "Success! Refreshing...";
+        setTimeout(() => location.reload(), 2000);
     }
     </script>
 </body>
 </html>
 """
 
+# Baki ke routes (index, delete, etc.) bilkul waise hi rahenge...
 @app.route('/')
 def index():
     search_query = request.args.get('q')

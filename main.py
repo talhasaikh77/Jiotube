@@ -15,7 +15,110 @@ cloudinary.config(
 
 ADMIN_PASSWORD = "809047"
 
-# ... (Pura HTML Template wahi rahega jo pichli baar diya tha) ...
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JioTube Pro - Atif Khan</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; background: #f4f4f4; margin: 0; padding: 10px; }
+        .card { background: white; margin: 15px auto; padding: 15px; border-radius: 10px; width: 92%; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .thumb { width: 100%; height: auto; max-height: 200px; object-fit: cover; border-radius: 8px; }
+        .btn { text-decoration: none; display: block; margin: 10px 0; padding: 12px; border-radius: 5px; font-size: 14px; color: white; border: none; cursor: pointer; width: 100%; text-align:center; font-weight: bold; }
+        .btn-watch { background: #0078d7; }
+        .btn-del { background: #28a745; }
+        input { width: 90%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        #progress-wrapper { display: none; margin-top: 10px; background:white; padding:10px; border-radius:10px; }
+        #progress-bar-bg { background: #eee; border-radius: 10px; height: 15px; width: 100%; overflow: hidden; }
+        #progress-bar-fill { background: #28a745; height: 100%; width: 0%; transition: 0.2s; }
+    </style>
+</head>
+<body>
+    <h3 align="center" style="color:#0078d7;">JioTube Pro - Atif Khan</h3>
+    
+    <div style="background:white; padding:15px; border-radius:10px; margin-bottom:15px; text-align:center; border: 2px solid #0078d7;">
+        <b>🚀 Fast Uploader (20MB Chunks)</b><br><br>
+        <input type="file" id="fileInput"><br>
+        <input type="text" id="nameInput" placeholder="Video ka naam..."><br>
+        <button onclick="startUpload()" class="btn btn-watch">UPLOAD NOW</button>
+        
+        <div id="progress-wrapper">
+            <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
+            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Preparing...</div>
+        </div>
+    </div>
+
+    <form action="/" method="get" style="text-align:center; margin-bottom:15px;">
+        <input type="text" name="q" placeholder="Video khojein..." style="width:60%;">
+        <button type="submit" style="padding:10px; background:#333; color:white; border:none; border-radius:5px;">Search</button>
+    </form>
+
+    <div align="center">
+        {% for v in videos %}
+        <div class="card">
+            <img src="{{ v.secure_url.replace('.mp4', '.jpg').replace('.mkv', '.jpg') }}" class="thumb">
+            <h4 style="margin: 10px 0;">{{ v.public_id }}</h4>
+            <a href="{{ v.secure_url }}" class="btn btn-watch">Watch / Download</a>
+            <a href="/delete-page?pid={{ v.public_id }}" class="btn btn-del">Delete</a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+    async function startUpload() {
+        const file = document.getElementById('fileInput').files[0];
+        const name = document.getElementById('nameInput').value;
+        if(!file) return alert("Select File!");
+
+        document.getElementById('progress-wrapper').style.display = 'block';
+        const status = document.getElementById('status');
+        const fill = document.getElementById('progress-bar-fill');
+
+        const cloudName = "dawterffe";
+        const unsignedPreset = "ml_default";
+        const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
+
+        const chunkSize = 20 * 1024 * 1024; 
+        const totalChunks = Math.ceil(file.size / chunkSize);
+        const uniqueId = "atif_" + Date.now();
+
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * chunkSize;
+            const end = Math.min(file.size, start + chunkSize);
+            const chunk = file.slice(start, end);
+            const formData = new FormData();
+            formData.append("file", chunk);
+            formData.append("upload_preset", unsignedPreset);
+            if(name) formData.append("public_id", name);
+
+            status.innerText = `Uploading Part ${i+1}/${totalChunks}...`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Unique-Upload-Id': uniqueId,
+                        'Content-Range': `bytes ${start}-${end - 1}/${file.size}`
+                    }
+                });
+                if (!response.ok) throw new Error('Fail');
+                const percent = Math.round((end / file.size) * 100);
+                fill.style.width = percent + "%";
+                status.innerText = "Progress: " + percent + "%";
+            } catch (err) {
+                alert("Upload Error! Check Dashboard.");
+                return;
+            }
+        }
+        status.innerText = "Success! Refreshing...";
+        setTimeout(() => location.reload(), 1500);
+    }
+    </script>
+</body>
+</html>
+"""
 
 @app.route('/')
 def index():
@@ -40,8 +143,6 @@ def confirm_del():
         return "Deleted! <a href='/'>Back</a>"
     return "Wrong!"
 
-# --- YEH RAHI PORT WALI SETTING ---
 if __name__ == '__main__':
-    # Render ke liye 'PORT' environment variable lena zaroori hai
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)

@@ -23,7 +23,7 @@ HTML_TEMPLATE = """
     <style>
         body { font-family: sans-serif; background: #f4f4f4; margin: 0; padding: 10px; }
         .card { background: white; margin: 15px auto; padding: 15px; border-radius: 10px; width: 92%; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .thumb { width: 100%; height: auto; max-height: 200px; object-fit: cover; border-radius: 8px; }
+        .thumb { width: 100%; height: auto; max-height: 200px; object-fit: cover; border-radius: 8px; background:#000; }
         .btn { text-decoration: none; display: block; margin: 10px 0; padding: 12px; border-radius: 5px; font-size: 14px; color: white; border: none; cursor: pointer; width: 100%; text-align:center; font-weight: bold; }
         .btn-watch { background: #0078d7; }
         .btn-del { background: #28a745; }
@@ -31,6 +31,8 @@ HTML_TEMPLATE = """
         #progress-wrapper { display: none; margin-top: 10px; background:white; padding:10px; border-radius:10px; }
         #progress-bar-bg { background: #eee; border-radius: 10px; height: 15px; width: 100%; overflow: hidden; }
         #progress-bar-fill { background: #0078d7; height: 100%; width: 0%; transition: 0.2s; }
+        .next-box { text-align: center; padding: 20px; }
+        .btn-next { background: #333; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -49,7 +51,7 @@ HTML_TEMPLATE = """
     </div>
 
     <form action="/" method="get" style="text-align:center; margin-bottom:15px;">
-        <input type="text" name="q" placeholder="Video khojein..." style="width:60%;">
+        <input type="text" name="q" value="{{ query or '' }}" placeholder="Video khojein..." style="width:60%;">
         <button type="submit" style="padding:10px; background:#333; color:white; border:none; border-radius:5px;">Search</button>
     </form>
 
@@ -63,6 +65,12 @@ HTML_TEMPLATE = """
         </div>
         {% endfor %}
     </div>
+
+    {% if next_cursor %}
+    <div class="next-box">
+        <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" class="btn-next">Next Page >></a>
+    </div>
+    {% endif %}
 
     <script>
     async function startUpload() {
@@ -80,8 +88,7 @@ HTML_TEMPLATE = """
         const unsignedPreset = "ml_default";
         const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
 
-        // Chunking Config
-        const chunkSize = 5 * 1024 * 1024; // 5MB chunks
+        const chunkSize = 5 * 1024 * 1024; 
         const totalChunks = Math.ceil(file.size / chunkSize);
         const uniqueId = "atif_" + Date.now();
 
@@ -114,9 +121,7 @@ HTML_TEMPLATE = """
                 status.innerText = "Progress: " + percent + "%";
 
             } catch (err) {
-                console.error(err);
                 status.innerText = "Error! Check Dashboard Settings.";
-                alert("Upload Blocked! Confirm 'ml_default' is Unsigned.");
                 return;
             }
         }
@@ -133,9 +138,12 @@ def index():
     search_query = request.args.get('q')
     cursor = request.args.get('next_cursor')
     try:
+        # max_results=10 rakha hai taaki har 10 video ke baad button dikhe
         res = cloudinary.api.resources(resource_type="video", type="upload", prefix=search_query if search_query else None, max_results=10, next_cursor=cursor)
-        videos, nxt = res.get('resources', []), res.get('next_cursor')
-    except: videos, nxt = [], None
+        videos = res.get('resources', [])
+        nxt = res.get('next_cursor')
+    except: 
+        videos, nxt = [], None
     return render_template_string(HTML_TEMPLATE, videos=videos, next_cursor=nxt, query=search_query)
 
 @app.route('/delete-page')

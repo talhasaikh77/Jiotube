@@ -5,7 +5,6 @@ import cloudinary.api
 
 app = Flask(__name__)
 
-# Cloudinary Config
 cloudinary.config(
   cloud_name = "dawterffe",
   api_key = "258318685843824",
@@ -24,28 +23,28 @@ HTML_TEMPLATE = """
     <style>
         body { font-family: sans-serif; background: #f4f4f4; margin: 0; padding: 10px; }
         .card { background: white; margin: 15px auto; padding: 15px; border-radius: 10px; width: 92%; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .thumb { width: 100%; height: auto; max-height: 200px; object-fit: cover; border-radius: 8px; background: #000; }
+        .thumb { width: 100%; height: auto; max-height: 200px; object-fit: cover; border-radius: 8px; }
         .btn { text-decoration: none; display: block; margin: 10px 0; padding: 12px; border-radius: 5px; font-size: 14px; color: white; border: none; cursor: pointer; width: 100%; text-align:center; font-weight: bold; }
         .btn-watch { background: #0078d7; }
         .btn-del { background: #28a745; }
         input { width: 90%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; }
         #progress-wrapper { display: none; margin-top: 10px; background:white; padding:10px; border-radius:10px; }
         #progress-bar-bg { background: #eee; border-radius: 10px; height: 15px; width: 100%; overflow: hidden; }
-        #progress-bar-fill { background: #28a745; height: 100%; width: 0%; transition: 0.2s; }
+        #progress-bar-fill { background: #0078d7; height: 100%; width: 0%; transition: 0.2s; }
     </style>
 </head>
 <body>
     <h3 align="center" style="color:#0078d7;">JioTube Pro - Atif Khan</h3>
     
     <div style="background:white; padding:15px; border-radius:10px; margin-bottom:15px; text-align:center; border: 2px solid #0078d7;">
-        <b>🚀 Fast Uploader (20MB Chunks)</b><br><br>
+        <b>🚀 Direct Uploader</b><br><br>
         <input type="file" id="fileInput"><br>
         <input type="text" id="nameInput" placeholder="Video ka naam..."><br>
         <button onclick="startUpload()" class="btn btn-watch">UPLOAD NOW</button>
         
         <div id="progress-wrapper">
             <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
-            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Preparing...</div>
+            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Connecting...</div>
         </div>
     </div>
 
@@ -57,7 +56,7 @@ HTML_TEMPLATE = """
     <div align="center">
         {% for v in videos %}
         <div class="card">
-            <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/300x150?text=Processing...';">
+            <img src="{{ v.secure_url.replace('.mp4', '.jpg').replace('.mkv', '.jpg') }}" class="thumb">
             <h4 style="margin: 10px 0;">{{ v.public_id }}</h4>
             <a href="{{ v.secure_url }}" class="btn btn-watch">Watch / Download</a>
             <a href="/delete-page?pid={{ v.public_id }}" class="btn btn-del">Delete</a>
@@ -65,16 +64,12 @@ HTML_TEMPLATE = """
         {% endfor %}
     </div>
 
-    <div style="text-align:center; padding:20px;">
-        {% if next_cursor %}
-            <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" style="background:#333; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; font-weight:bold;">Next Page >></a>
-        {% endif %}
-    </div>
-
     <script>
     async function startUpload() {
-        const file = document.getElementById('fileInput').files[0];
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
         const name = document.getElementById('nameInput').value;
+        
         if(!file) return alert("Select File!");
 
         document.getElementById('progress-wrapper').style.display = 'block';
@@ -85,7 +80,8 @@ HTML_TEMPLATE = """
         const unsignedPreset = "ml_default";
         const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
 
-        const chunkSize = 20 * 1024 * 1024; 
+        // Chunking Config
+        const chunkSize = 5 * 1024 * 1024; // 5MB chunks
         const totalChunks = Math.ceil(file.size / chunkSize);
         const uniqueId = "atif_" + Date.now();
 
@@ -93,6 +89,7 @@ HTML_TEMPLATE = """
             const start = i * chunkSize;
             const end = Math.min(file.size, start + chunkSize);
             const chunk = file.slice(start, end);
+
             const formData = new FormData();
             formData.append("file", chunk);
             formData.append("upload_preset", unsignedPreset);
@@ -109,17 +106,22 @@ HTML_TEMPLATE = """
                         'Content-Range': `bytes ${start}-${end - 1}/${file.size}`
                     }
                 });
-                if (!response.ok) throw new Error('Fail');
+
+                if (!response.ok) throw new Error('Upload Failed');
+
                 const percent = Math.round((end / file.size) * 100);
                 fill.style.width = percent + "%";
                 status.innerText = "Progress: " + percent + "%";
+
             } catch (err) {
-                alert("Upload Error!");
+                console.error(err);
+                status.innerText = "Error! Check Dashboard Settings.";
+                alert("Upload Blocked! Confirm 'ml_default' is Unsigned.");
                 return;
             }
         }
-        status.innerText = "Success! Refreshing...";
-        setTimeout(() => location.reload(), 1500);
+        status.innerText = "Mubarak! Refreshing...";
+        setTimeout(() => location.reload(), 2000);
     }
     </script>
 </body>
@@ -132,10 +134,8 @@ def index():
     cursor = request.args.get('next_cursor')
     try:
         res = cloudinary.api.resources(resource_type="video", type="upload", prefix=search_query if search_query else None, max_results=10, next_cursor=cursor)
-        videos = res.get('resources', [])
-        nxt = res.get('next_cursor')
-    except:
-        videos, nxt = [], None
+        videos, nxt = res.get('resources', []), res.get('next_cursor')
+    except: videos, nxt = [], None
     return render_template_string(HTML_TEMPLATE, videos=videos, next_cursor=nxt, query=search_query)
 
 @app.route('/delete-page')
@@ -151,7 +151,5 @@ def confirm_del():
         return "Deleted! <a href='/'>Back</a>"
     return "Wrong!"
 
-# --- PORT SETTING PHIR SE DAL DI HAI ---
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

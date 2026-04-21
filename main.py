@@ -5,7 +5,6 @@ import cloudinary.api
 
 app = Flask(__name__)
 
-# Cloudinary Config
 cloudinary.config(
   cloud_name = "dawterffe",
   api_key = "258318685843824",
@@ -40,7 +39,7 @@ HTML_TEMPLATE = """
     <h3 align="center" style="color:#0078d7;">JioTube Pro - Atif Khan</h3>
     
     <div style="background:white; padding:15px; border-radius:10px; margin-bottom:15px; text-align:center; border: 2px solid #0078d7;">
-        <b>🚀 Heavy Video Uploader (200MB+ OK)</b><br><br>
+        <b>🚀 Heavy Video Uploader (Breaking 100MB Limit)</b><br><br>
         <input type="file" id="fileInput"><br>
         <input type="text" id="nameInput" placeholder="Video ka naam..."><br>
         <button onclick="startUpload()" class="btn btn-watch">UPLOAD NOW</button>
@@ -67,17 +66,11 @@ HTML_TEMPLATE = """
         {% endfor %}
     </div>
 
-    {% if next_cursor %}
-    <div align="center">
-        <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" style="background:#333; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Next Page >></a>
-    </div>
-    {% endif %}
-
     <script>
     async function startUpload() {
         const file = document.getElementById('fileInput').files[0];
         const name = document.getElementById('nameInput').value;
-        if(!file) return alert("Pehle video select karein!");
+        if(!file) return alert("File chunein!");
 
         document.getElementById('progress-wrapper').style.display = 'block';
         const status = document.getElementById('status');
@@ -87,9 +80,10 @@ HTML_TEMPLATE = """
         const unsignedPreset = "ml_default";
         const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
 
-        const chunkSize = 6 * 1024 * 1024; 
+        // YEH HAI JADU: 5MB ke Chunks
+        const chunkSize = 5 * 1024 * 1024; 
         const totalChunks = Math.ceil(file.size / chunkSize);
-        const uniqueUploadId = 'atif_' + Date.now();
+        const uniqueId = 'atif_' + Math.random().toString(36).substr(2, 9);
 
         for (let i = 0; i < totalChunks; i++) {
             const start = i * chunkSize;
@@ -101,24 +95,25 @@ HTML_TEMPLATE = """
             formData.append("upload_preset", unsignedPreset);
             if(name) formData.append("public_id", name);
             
+            // Cloudinary ko batana ki ye badi file ka hissa hai
             const contentRange = `bytes ${start}-${end - 1}/${file.size}`;
 
             try {
                 await axios.post(url, formData, {
                     headers: {
-                        'X-Unique-Upload-Id': uniqueUploadId,
+                        'X-Unique-Upload-Id': uniqueId,
                         'Content-Range': contentRange
                     }
                 });
                 const percent = Math.round((end * 100) / file.size);
                 fill.style.width = percent + "%";
-                status.innerText = "Uploading: " + percent + "%";
+                status.innerText = "Processing Part " + (i+1) + "/" + totalChunks + " (" + percent + "%)";
             } catch (err) {
-                alert("Upload Fail! Check Internet.");
+                alert("Upload Fail! Connection slow hai.");
                 return;
             }
         }
-        status.innerText = "Upload Mubarak! Refresh ho raha hai...";
+        status.innerText = "100% Success! Reloading...";
         setTimeout(() => location.reload(), 2000);
     }
     </script>
@@ -139,7 +134,7 @@ def index():
 @app.route('/delete-page')
 def delete_page():
     pid = request.args.get('pid')
-    return render_template_string('<body style="text-align:center;padding:50px;"><h3>Delete: {{pid}}?</h3><form action="/confirm-del" method="post"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass: 809047" required><br><br><button type="submit">DELETE</button></form></body>', pid=pid)
+    return render_template_string('<body style="text-align:center;padding:50px;"><h3>Delete: {{pid}}?</h3><form action="/confirm-del" method="post"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required><br><br><button type="submit">DELETE</button></form></body>', pid=pid)
 
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():
@@ -147,8 +142,8 @@ def confirm_del():
         import cloudinary.uploader
         cloudinary.uploader.destroy(request.form.get('pid'), resource_type="video")
         return "Deleted! <a href='/'>Back</a>"
-    return "Wrong Password!"
+    return "Wrong!"
 
-# YE RAHA AAPKA PORT WALA HISSA (SABSE LAST MEIN)
 if __name__ == '__main__':
+    # Render compatible port
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

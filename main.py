@@ -31,15 +31,13 @@ HTML_TEMPLATE = """
         #progress-wrapper { display: none; margin-top: 10px; background:white; padding:10px; border-radius:10px; }
         #progress-bar-bg { background: #eee; border-radius: 10px; height: 15px; width: 100%; overflow: hidden; }
         #progress-bar-fill { background: #0078d7; height: 100%; width: 0%; transition: 0.2s; }
-        .next-box { text-align: center; padding: 20px; }
-        .btn-next { background: #333; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; }
     </style>
 </head>
 <body>
     <h3 align="center" style="color:#0078d7;">JioTube Pro - Atif Khan</h3>
     
     <div style="background:white; padding:15px; border-radius:10px; margin-bottom:15px; text-align:center; border: 2px solid #0078d7;">
-        <b>🚀 Direct Uploader</b><br><br>
+        <b>🚀 Fast Uploader (20MB Chunks)</b><br><br>
         <input type="file" id="fileInput"><br>
         <input type="text" id="nameInput" placeholder="Video ka naam..."><br>
         <button onclick="startUpload()" class="btn btn-watch">UPLOAD NOW</button>
@@ -58,7 +56,7 @@ HTML_TEMPLATE = """
     <div align="center">
         {% for v in videos %}
         <div class="card">
-            <img src="{{ v.secure_url.replace('.mp4', '.jpg').replace('.mkv', '.jpg') }}" class="thumb">
+            <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/300x150?text=Processing...';">
             <h4 style="margin: 10px 0;">{{ v.public_id }}</h4>
             <a href="{{ v.secure_url }}" class="btn btn-watch">Watch / Download</a>
             <a href="/delete-page?pid={{ v.public_id }}" class="btn btn-del">Delete</a>
@@ -67,17 +65,15 @@ HTML_TEMPLATE = """
     </div>
 
     {% if next_cursor %}
-    <div class="next-box">
-        <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" class="btn-next">Next Page >></a>
+    <div style="text-align:center; padding:20px;">
+        <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" style="background:#333; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; font-weight:bold;">Next Page >></a>
     </div>
     {% endif %}
 
     <script>
     async function startUpload() {
-        const fileInput = document.getElementById('fileInput');
-        const file = fileInput.files[0];
+        const file = document.getElementById('fileInput').files[0];
         const name = document.getElementById('nameInput').value;
-        
         if(!file) return alert("Select File!");
 
         document.getElementById('progress-wrapper').style.display = 'block';
@@ -85,10 +81,13 @@ HTML_TEMPLATE = """
         const fill = document.getElementById('progress-bar-fill');
 
         const cloudName = "dawterffe";
-        const unsignedPreset = "ml_default";
+        
+        // AAPKE SCREENSHOT KE MUTABIQ PRESET NAME
+        const unsignedPreset = "ML video"; 
+        
         const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
 
-        const chunkSize = 5 * 1024 * 1024; 
+        const chunkSize = 20 * 1024 * 1024; 
         const totalChunks = Math.ceil(file.size / chunkSize);
         const uniqueId = "atif_" + Date.now();
 
@@ -114,14 +113,18 @@ HTML_TEMPLATE = """
                     }
                 });
 
-                if (!response.ok) throw new Error('Upload Failed');
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error.message);
+                }
 
                 const percent = Math.round((end / file.size) * 100);
                 fill.style.width = percent + "%";
                 status.innerText = "Progress: " + percent + "%";
 
             } catch (err) {
-                status.innerText = "Error! Check Dashboard Settings.";
+                alert("Error: " + err.message);
+                status.innerText = "Error!";
                 return;
             }
         }
@@ -138,12 +141,9 @@ def index():
     search_query = request.args.get('q')
     cursor = request.args.get('next_cursor')
     try:
-        # max_results=10 rakha hai taaki har 10 video ke baad button dikhe
         res = cloudinary.api.resources(resource_type="video", type="upload", prefix=search_query if search_query else None, max_results=10, next_cursor=cursor)
-        videos = res.get('resources', [])
-        nxt = res.get('next_cursor')
-    except: 
-        videos, nxt = [], None
+        videos, nxt = res.get('resources', []), res.get('next_cursor')
+    except: videos, nxt = [], None
     return render_template_string(HTML_TEMPLATE, videos=videos, next_cursor=nxt, query=search_query)
 
 @app.route('/delete-page')
@@ -160,4 +160,6 @@ def confirm_del():
     return "Wrong!"
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
+

@@ -46,7 +46,7 @@ HTML_TEMPLATE = """
         
         <div id="p-wrap">
             <div id="p-bg"><div id="p-fill"></div></div>
-            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Tayyari...</div>
+            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Connecting...</div>
         </div>
     </div>
 
@@ -85,52 +85,43 @@ HTML_TEMPLATE = """
         const fill = document.getElementById('p-fill');
 
         const cloudName = "dawterffe";
-        const unsignedPreset = "ml_default";
-        // Large video support ke liye ye URL zaruri hai
         const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
-
-        const chunkSize = 6 * 1024 * 1024; // 6MB Chill
+        
+        // CHILL LIMIT 6MB
+        const chunkSize = 6 * 1024 * 1024; 
         const totalChunks = Math.ceil(file.size / chunkSize);
         const uniqueId = "atif_" + Date.now();
 
         for (let i = 0; i < totalChunks; i++) {
             const start = i * chunkSize;
             const end = Math.min(file.size, start + chunkSize);
-            const chunk = file.slice(start, end);
-            
             const formData = new FormData();
-            formData.append("file", chunk);
-            formData.append("upload_preset", unsignedPreset);
-            // Badi files ke liye ye flag batana padta hai
+            formData.append("file", file.slice(start, end));
+            formData.append("upload_preset", "ml_default");
             formData.append("resource_type", "video");
             if(safeName) formData.append("public_id", safeName);
 
-            status.innerText = `Part ${i+1}/${totalChunks} ja raha hai...`;
-
+            status.innerText = `Part ${i+1}/${totalChunks} sending...`;
+            
             try {
-                const response = await fetch(url, {
+                const res = await fetch(url, {
                     method: 'POST',
                     body: formData,
-                    headers: {
-                        'X-Unique-Upload-Id': uniqueId,
-                        'Content-Range': `bytes ${start}-${end - 1}/${file.size}`
-                    }
+                    headers: { 'X-Unique-Upload-Id': uniqueId, 'Content-Range': `bytes ${start}-${end-1}/${file.size}` }
                 });
                 
-                if (!response.ok) {
-                    const errorJson = await response.json();
-                    throw new Error(errorJson.error.message);
+                if(!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error.message);
                 }
-
-                const percent = Math.round((end / file.size) * 100);
-                fill.style.width = percent + "%";
-                status.innerText = "Progress: " + percent + "%";
-            } catch (err) {
-                alert("Upload Failed: " + err.message);
+                
+                fill.style.width = Math.round((end/file.size)*100) + "%";
+            } catch (e) {
+                alert("Upload failed: " + e.message);
                 return;
             }
         }
-        status.innerText = "Mubarak! Refresh ho raha hai...";
+        status.innerText = "Success! Refreshing...";
         setTimeout(() => location.reload(), 1500);
     }
     </script>
@@ -140,24 +131,24 @@ HTML_TEMPLATE = """
 
 @app.route('/')
 def index():
-    search_query = request.args.get('q')
+    q = request.args.get('q')
     cursor = request.args.get('next_cursor')
     try:
-        res = cloudinary.api.resources(resource_type="video", type="upload", prefix=search_query if search_query else None, max_results=10, next_cursor=cursor)
+        res = cloudinary.api.resources(resource_type="video", type="upload", prefix=q if q else None, max_results=10, next_cursor=cursor)
         videos, nxt = res.get('resources', []), res.get('next_cursor')
     except: videos, nxt = [], None
-    return render_template_string(HTML_TEMPLATE, videos=videos, next_cursor=nxt, query=search_query)
+    return render_template_string(HTML_TEMPLATE, videos=videos, next_cursor=nxt, query=q)
 
 @app.route('/delete-page')
 def delete_page():
     pid = request.args.get('pid')
-    return render_template_string('<body style="text-align:center;padding:50px;"><h3>Mita dein?</h3><form action="/confirm-del" method="post"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required><br><br><button type="submit" style="background:red; color:white; padding:10px;">DELETE</button></form></body>', pid=pid)
+    return render_template_string('<body style="text-align:center;padding:50px;"><h3>Delete: {{pid}}?</h3><form action="/confirm-del" method="post"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required><br><br><button type="submit" class="btn btn-del">CONFIRM DELETE</button></form></body>', pid=pid)
 
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():
     if request.form.get('pw') == ADMIN_PASSWORD:
         cloudinary.uploader.destroy(request.form.get('pid'), resource_type="video")
-        return "Deleted! <a href='/'>Wapas jayein</a>"
+        return "Deleted! <a href='/'>Back</a>"
     return "Wrong Password!"
 
 if __name__ == '__main__':

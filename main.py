@@ -28,7 +28,7 @@ HTML_TEMPLATE = """
         .btn { text-decoration: none; display: block; margin: 10px 0; padding: 12px; border-radius: 5px; font-size: 14px; color: white; border: none; cursor: pointer; width: 100%; text-align:center; font-weight: bold; }
         .btn-watch { background: #0078d7; }
         .btn-del { background: #28a745; }
-        input { width: 90%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        input { width: 90%; padding: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
         #progress-wrapper { display: none; margin-top: 10px; background:white; padding:10px; border-radius:10px; }
         #progress-bar-bg { background: #eee; border-radius: 10px; height: 15px; width: 100%; overflow: hidden; }
         #progress-bar-fill { background: #28a745; height: 100%; width: 0%; transition: 0.2s; }
@@ -38,14 +38,14 @@ HTML_TEMPLATE = """
     <h3 align="center" style="color:#0078d7;">JioTube Pro - Atif Khan</h3>
     
     <div style="background:white; padding:15px; border-radius:10px; margin-bottom:15px; text-align:center; border: 2px solid #0078d7;">
-        <b>🚀 Fast Uploader (6MB Chunks)</b><br><br>
+        <b>🚀 Uploader (6MB Chill)</b><br><br>
         <input type="file" id="fileInput"><br>
         <input type="text" id="nameInput" placeholder="Video ka naam..."><br>
         <button onclick="startUpload()" class="btn btn-watch">UPLOAD NOW</button>
         
         <div id="progress-wrapper">
             <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
-            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Preparing...</div>
+            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Tayyari ho rahi hai...</div>
         </div>
     </div>
 
@@ -65,22 +65,21 @@ HTML_TEMPLATE = """
         {% endfor %}
     </div>
 
+    {% if next_cursor %}
     <div style="text-align:center; padding:20px;">
-        {% if next_cursor %}
-            <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" style="background:#333; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; font-weight:bold;">Next Page >></a>
-        {% endif %}
+        <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" style="background:#333; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; font-weight:bold;">Next Page >></a>
     </div>
+    {% endif %}
 
     <script>
     async function startUpload() {
         const file = document.getElementById('fileInput').files[0];
-        // .trim() aage-piche ki space khatam kar dega
-        let name = document.getElementById('nameInput').value.trim();
-        // Beech ki space ko underscore (_) se badal dega taaki error na aaye
-        name = name.replace(/\\s+/g, '_');
+        if(!file) return alert("File chuno pehle!");
 
-        if(!file) return alert("Select File!");
-
+        // AUTO-FIX: Space aur faltu characters hatane ke liye
+        let rawName = document.getElementById('nameInput').value.trim();
+        let safeName = rawName.replace(/[^a-zA-Z0-0]/g, '_').replace(/_{2,}/g, '_');
+        
         document.getElementById('progress-wrapper').style.display = 'block';
         const status = document.getElementById('status');
         const fill = document.getElementById('progress-bar-fill');
@@ -89,7 +88,7 @@ HTML_TEMPLATE = """
         const unsignedPreset = "ml_default";
         const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
 
-        // CHILL SET TO 6MB
+        // 6MB CHILL
         const chunkSize = 6 * 1024 * 1024; 
         const totalChunks = Math.ceil(file.size / chunkSize);
         const uniqueId = "atif_" + Date.now();
@@ -101,9 +100,9 @@ HTML_TEMPLATE = """
             const formData = new FormData();
             formData.append("file", chunk);
             formData.append("upload_preset", unsignedPreset);
-            if(name) formData.append("public_id", name);
+            if(safeName) formData.append("public_id", safeName);
 
-            status.innerText = `Uploading Part ${i+1}/${totalChunks}...`;
+            status.innerText = `Part ${i+1}/${totalChunks} ja raha hai...`;
 
             try {
                 const response = await fetch(url, {
@@ -115,18 +114,18 @@ HTML_TEMPLATE = """
                     }
                 });
                 if (!response.ok) {
-                    const errJson = await response.json();
-                    throw new Error(errJson.error.message);
+                    const err = await response.json();
+                    throw new Error(err.error.message);
                 }
                 const percent = Math.round((end / file.size) * 100);
                 fill.style.width = percent + "%";
                 status.innerText = "Progress: " + percent + "%";
             } catch (err) {
-                alert("Upload Error: " + err.message);
+                alert("Galti: " + err.message);
                 return;
             }
         }
-        status.innerText = "Success! Refreshing...";
+        status.innerText = "Mubarak! Refresh ho raha hai...";
         setTimeout(() => location.reload(), 1500);
     }
     </script>
@@ -140,24 +139,22 @@ def index():
     cursor = request.args.get('next_cursor')
     try:
         res = cloudinary.api.resources(resource_type="video", type="upload", prefix=search_query if search_query else None, max_results=10, next_cursor=cursor)
-        videos = res.get('resources', [])
-        nxt = res.get('next_cursor')
-    except:
-        videos, nxt = [], None
+        videos, nxt = res.get('resources', []), res.get('next_cursor')
+    except: videos, nxt = [], None
     return render_template_string(HTML_TEMPLATE, videos=videos, next_cursor=nxt, query=search_query)
 
 @app.route('/delete-page')
 def delete_page():
     pid = request.args.get('pid')
-    return render_template_string('<body style="text-align:center;padding:50px;"><h3>Delete: {{pid}}?</h3><form action="/confirm-del" method="post"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required><br><br><button type="submit">DELETE</button></form></body>', pid=pid)
+    return render_template_string('<body style="text-align:center;padding:50px;"><h3>Mita dein: {{pid}}?</h3><form action="/confirm-del" method="post"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Password" required><br><br><button type="submit">DELETE</button></form></body>', pid=pid)
 
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():
     if request.form.get('pw') == ADMIN_PASSWORD:
         import cloudinary.uploader
         cloudinary.uploader.destroy(request.form.get('pid'), resource_type="video")
-        return "Deleted! <a href='/'>Back</a>"
-    return "Wrong!"
+        return "Mita diya gaya! <a href='/'>Wapas jayein</a>"
+    return "Password galat hai!"
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

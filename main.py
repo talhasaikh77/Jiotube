@@ -81,10 +81,7 @@ HTML_TEMPLATE = """
         const fill = document.getElementById('progress-bar-fill');
 
         const cloudName = "dawterffe";
-        
-        // AAPKE SCREENSHOT KE MUTABIQ PRESET NAME
-        const unsignedPreset = "ML video"; 
-        
+        const unsignedPreset = "ml_default"; // AAPNE JO BANAYA WAHI RAKHA HAI
         const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
 
         const chunkSize = 20 * 1024 * 1024; 
@@ -121,7 +118,6 @@ HTML_TEMPLATE = """
                 const percent = Math.round((end / file.size) * 100);
                 fill.style.width = percent + "%";
                 status.innerText = "Progress: " + percent + "%";
-
             } catch (err) {
                 alert("Error: " + err.message);
                 status.innerText = "Error!";
@@ -162,4 +158,3 @@ def confirm_del():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
-

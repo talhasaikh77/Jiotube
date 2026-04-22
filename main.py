@@ -5,6 +5,7 @@ import cloudinary.api
 
 app = Flask(__name__)
 
+# Cloudinary Config
 cloudinary.config(
   cloud_name = "dawterffe",
   api_key = "258318685843824",
@@ -23,33 +24,33 @@ HTML_TEMPLATE = """
     <style>
         body { font-family: sans-serif; background: #f4f4f4; margin: 0; padding: 10px; }
         .card { background: white; margin: 15px auto; padding: 15px; border-radius: 10px; width: 92%; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .thumb { width: 100%; height: auto; max-height: 200px; object-fit: cover; border-radius: 8px; background:#000; }
+        .thumb { width: 100%; height: auto; max-height: 200px; object-fit: cover; border-radius: 8px; background: #000; }
         .btn { text-decoration: none; display: block; margin: 10px 0; padding: 12px; border-radius: 5px; font-size: 14px; color: white; border: none; cursor: pointer; width: 100%; text-align:center; font-weight: bold; }
         .btn-watch { background: #0078d7; }
         .btn-del { background: #28a745; }
         input { width: 90%; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; }
         #progress-wrapper { display: none; margin-top: 10px; background:white; padding:10px; border-radius:10px; }
         #progress-bar-bg { background: #eee; border-radius: 10px; height: 15px; width: 100%; overflow: hidden; }
-        #progress-bar-fill { background: #0078d7; height: 100%; width: 0%; transition: 0.2s; }
+        #progress-bar-fill { background: #28a745; height: 100%; width: 0%; transition: 0.2s; }
     </style>
 </head>
 <body>
     <h3 align="center" style="color:#0078d7;">JioTube Pro - Atif Khan</h3>
     
     <div style="background:white; padding:15px; border-radius:10px; margin-bottom:15px; text-align:center; border: 2px solid #0078d7;">
-        <b>🚀 Fast Uploader (20MB Chunks)</b><br><br>
+        <b>🚀 Fast Uploader (6MB Chunks)</b><br><br>
         <input type="file" id="fileInput"><br>
         <input type="text" id="nameInput" placeholder="Video ka naam..."><br>
         <button onclick="startUpload()" class="btn btn-watch">UPLOAD NOW</button>
         
         <div id="progress-wrapper">
             <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
-            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Connecting...</div>
+            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Preparing...</div>
         </div>
     </div>
 
     <form action="/" method="get" style="text-align:center; margin-bottom:15px;">
-        <input type="text" name="q" value="{{ query or '' }}" placeholder="Video khojein..." style="width:60%;">
+        <input type="text" name="q" placeholder="Video khojein..." style="width:60%;">
         <button type="submit" style="padding:10px; background:#333; color:white; border:none; border-radius:5px;">Search</button>
     </form>
 
@@ -64,16 +65,20 @@ HTML_TEMPLATE = """
         {% endfor %}
     </div>
 
-    {% if next_cursor %}
     <div style="text-align:center; padding:20px;">
-        <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" style="background:#333; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; font-weight:bold;">Next Page >></a>
+        {% if next_cursor %}
+            <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" style="background:#333; color:white; padding:10px 20px; text-decoration:none; border-radius:5px; font-weight:bold;">Next Page >></a>
+        {% endif %}
     </div>
-    {% endif %}
 
     <script>
     async function startUpload() {
         const file = document.getElementById('fileInput').files[0];
-        const name = document.getElementById('nameInput').value;
+        // .trim() aage-piche ki space khatam kar dega
+        let name = document.getElementById('nameInput').value.trim();
+        // Beech ki space ko underscore (_) se badal dega taaki error na aaye
+        name = name.replace(/\\s+/g, '_');
+
         if(!file) return alert("Select File!");
 
         document.getElementById('progress-wrapper').style.display = 'block';
@@ -81,10 +86,11 @@ HTML_TEMPLATE = """
         const fill = document.getElementById('progress-bar-fill');
 
         const cloudName = "dawterffe";
-        const unsignedPreset = "ml_default"; // AAPNE JO BANAYA WAHI RAKHA HAI
+        const unsignedPreset = "ml_default";
         const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
 
-        const chunkSize = 20 * 1024 * 1024; 
+        // CHILL SET TO 6MB
+        const chunkSize = 6 * 1024 * 1024; 
         const totalChunks = Math.ceil(file.size / chunkSize);
         const uniqueId = "atif_" + Date.now();
 
@@ -92,7 +98,6 @@ HTML_TEMPLATE = """
             const start = i * chunkSize;
             const end = Math.min(file.size, start + chunkSize);
             const chunk = file.slice(start, end);
-
             const formData = new FormData();
             formData.append("file", chunk);
             formData.append("upload_preset", unsignedPreset);
@@ -109,23 +114,20 @@ HTML_TEMPLATE = """
                         'Content-Range': `bytes ${start}-${end - 1}/${file.size}`
                     }
                 });
-
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error.message);
+                    const errJson = await response.json();
+                    throw new Error(errJson.error.message);
                 }
-
                 const percent = Math.round((end / file.size) * 100);
                 fill.style.width = percent + "%";
                 status.innerText = "Progress: " + percent + "%";
             } catch (err) {
-                alert("Error: " + err.message);
-                status.innerText = "Error!";
+                alert("Upload Error: " + err.message);
                 return;
             }
         }
-        status.innerText = "Mubarak! Refreshing...";
-        setTimeout(() => location.reload(), 2000);
+        status.innerText = "Success! Refreshing...";
+        setTimeout(() => location.reload(), 1500);
     }
     </script>
 </body>
@@ -138,8 +140,10 @@ def index():
     cursor = request.args.get('next_cursor')
     try:
         res = cloudinary.api.resources(resource_type="video", type="upload", prefix=search_query if search_query else None, max_results=10, next_cursor=cursor)
-        videos, nxt = res.get('resources', []), res.get('next_cursor')
-    except: videos, nxt = [], None
+        videos = res.get('resources', [])
+        nxt = res.get('next_cursor')
+    except:
+        videos, nxt = [], None
     return render_template_string(HTML_TEMPLATE, videos=videos, next_cursor=nxt, query=search_query)
 
 @app.route('/delete-page')

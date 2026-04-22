@@ -2,10 +2,11 @@ import os
 from flask import Flask, request, render_template_string
 import cloudinary
 import cloudinary.api
+import cloudinary.uploader
 
 app = Flask(__name__)
 
-# Cloudinary Config (Aapki Details)
+# Cloudinary Config
 cloudinary.config(
   cloud_name = "dawterffe",
   api_key = "258318685843824",
@@ -35,17 +36,17 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body>
-    <h3 align="center" style="color:#0078d7;">JioTube Pro</h3>
+    <h3 align="center" style="color:#0078d7;">JioTube Pro - Atif Khan</h3>
     
     <div style="background:white; padding:15px; border-radius:10px; margin-bottom:15px; text-align:center; border: 2px solid #0078d7;">
-        <b>🚀 Perfect Uploader (6MB Chill)</b><br><br>
+        <b>🚀 All-Size Uploader (6MB Chill)</b><br><br>
         <input type="file" id="fileInput">
-        <input type="text" id="nameInput" placeholder="Video ka naam (Space allowed)...">
+        <input type="text" id="nameInput" placeholder="Video ka naam...">
         <button onclick="startUpload()" class="btn btn-watch">UPLOAD NOW</button>
         
         <div id="p-wrap">
             <div id="p-bg"><div id="p-fill"></div></div>
-            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Connecting...</div>
+            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Tayyari...</div>
         </div>
     </div>
 
@@ -57,7 +58,7 @@ HTML_TEMPLATE = """
     <div align="center">
         {% for v in videos %}
         <div class="card">
-            <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/300x150?text=Video+Processing...';">
+            <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/300x150?text=Processing...';">
             <h4 style="margin: 10px 0; color:#333;">{{ v.public_id }}</h4>
             <a href="{{ v.secure_url }}" class="btn btn-watch">Watch / Download</a>
             <a href="/delete-page?pid={{ v.public_id }}" class="btn btn-del">Delete</a>
@@ -76,11 +77,6 @@ HTML_TEMPLATE = """
         const file = document.getElementById('fileInput').files[0];
         if(!file) return alert("Pehle file select karo!");
 
-        // 100MB CHECK (Cloudinary Free Limit)
-        if(file.size > 104857600) {
-            return alert("Error: File 100MB se badi hai! Cloudinary free plan mein 100MB se badi file allowed nahi hai.");
-        }
-
         let rawName = document.getElementById('nameInput').value.trim();
         let safeName = rawName.replace(/[^a-zA-Z0-9]/g, '_'); 
         
@@ -90,10 +86,10 @@ HTML_TEMPLATE = """
 
         const cloudName = "dawterffe";
         const unsignedPreset = "ml_default";
-        // Uploader URL for Large Files
+        // Large video support ke liye ye URL zaruri hai
         const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
 
-        const chunkSize = 6 * 1024 * 1024; // 6MB CHILL
+        const chunkSize = 6 * 1024 * 1024; // 6MB Chill
         const totalChunks = Math.ceil(file.size / chunkSize);
         const uniqueId = "atif_" + Date.now();
 
@@ -105,9 +101,11 @@ HTML_TEMPLATE = """
             const formData = new FormData();
             formData.append("file", chunk);
             formData.append("upload_preset", unsignedPreset);
+            // Badi files ke liye ye flag batana padta hai
+            formData.append("resource_type", "video");
             if(safeName) formData.append("public_id", safeName);
 
-            status.innerText = `Part ${i+1}/${totalChunks} sending...`;
+            status.innerText = `Part ${i+1}/${totalChunks} ja raha hai...`;
 
             try {
                 const response = await fetch(url, {
@@ -126,13 +124,13 @@ HTML_TEMPLATE = """
 
                 const percent = Math.round((end / file.size) * 100);
                 fill.style.width = percent + "%";
-                status.innerText = "Uploading: " + percent + "%";
+                status.innerText = "Progress: " + percent + "%";
             } catch (err) {
                 alert("Upload Failed: " + err.message);
                 return;
             }
         }
-        status.innerText = "Success! Refreshing...";
+        status.innerText = "Mubarak! Refresh ho raha hai...";
         setTimeout(() => location.reload(), 1500);
     }
     </script>
@@ -153,14 +151,13 @@ def index():
 @app.route('/delete-page')
 def delete_page():
     pid = request.args.get('pid')
-    return render_template_string('<body style="text-align:center;padding:50px;"><h3>Delete: {{pid}}?</h3><form action="/confirm-del" method="post"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required><br><br><button type="submit" style="background:red; color:white; padding:10px;">CONFIRM DELETE</button></form></body>', pid=pid)
+    return render_template_string('<body style="text-align:center;padding:50px;"><h3>Mita dein?</h3><form action="/confirm-del" method="post"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required><br><br><button type="submit" style="background:red; color:white; padding:10px;">DELETE</button></form></body>', pid=pid)
 
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():
     if request.form.get('pw') == ADMIN_PASSWORD:
-        import cloudinary.uploader
         cloudinary.uploader.destroy(request.form.get('pid'), resource_type="video")
-        return "Deleted! <a href='/'>Go Back</a>"
+        return "Deleted! <a href='/'>Wapas jayein</a>"
     return "Wrong Password!"
 
 if __name__ == '__main__':

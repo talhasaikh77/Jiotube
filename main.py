@@ -29,9 +29,9 @@ HTML_TEMPLATE = """
         .btn-watch { background: #0078d7; }
         .btn-del { background: #28a745; }
         input { width: 90%; padding: 12px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
-        #progress-wrapper { display: none; margin-top: 10px; background:white; padding:10px; border-radius:10px; }
-        #progress-bar-bg { background: #eee; border-radius: 10px; height: 15px; width: 100%; overflow: hidden; }
-        #progress-bar-fill { background: #28a745; height: 100%; width: 0%; transition: 0.2s; }
+        #p-wrap { display: none; margin-top: 10px; background:white; padding:10px; border-radius:10px; }
+        #p-bg { background: #eee; border-radius: 10px; height: 15px; width: 100%; overflow: hidden; }
+        #p-fill { background: #28a745; height: 100%; width: 0%; transition: 0.2s; }
     </style>
 </head>
 <body>
@@ -43,9 +43,9 @@ HTML_TEMPLATE = """
         <input type="text" id="nameInput" placeholder="Video ka naam..."><br>
         <button onclick="startUpload()" class="btn btn-watch">UPLOAD NOW</button>
         
-        <div id="progress-wrapper">
-            <div id="progress-bar-bg"><div id="progress-bar-fill"></div></div>
-            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Tayyari ho rahi hai...</div>
+        <div id="p-wrap">
+            <div id="p-bg"><div id="p-fill"></div></div>
+            <div id="status" style="font-size:12px; margin-top:5px; color:#0078d7;">Tayyari...</div>
         </div>
     </div>
 
@@ -74,22 +74,21 @@ HTML_TEMPLATE = """
     <script>
     async function startUpload() {
         const file = document.getElementById('fileInput').files[0];
-        if(!file) return alert("File chuno pehle!");
+        if(!file) return alert("Pehle file select karo!");
 
-        // AUTO-FIX: Space aur faltu characters hatane ke liye
+        // Atif Bhai, ye line naam se saari galti saaf kar degi
         let rawName = document.getElementById('nameInput').value.trim();
-        let safeName = rawName.replace(/[^a-zA-Z0-0]/g, '_').replace(/_{2,}/g, '_');
+        let safeName = rawName.replace(/[^a-zA-Z0-9]/g, '_'); 
         
-        document.getElementById('progress-wrapper').style.display = 'block';
+        document.getElementById('p-wrap').style.display = 'block';
         const status = document.getElementById('status');
-        const fill = document.getElementById('progress-bar-fill');
+        const fill = document.getElementById('p-fill');
 
         const cloudName = "dawterffe";
         const unsignedPreset = "ml_default";
         const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
 
-        // 6MB CHILL
-        const chunkSize = 6 * 1024 * 1024; 
+        const chunkSize = 6 * 1024 * 1024; // 6MB CHILL
         const totalChunks = Math.ceil(file.size / chunkSize);
         const uniqueId = "atif_" + Date.now();
 
@@ -100,9 +99,10 @@ HTML_TEMPLATE = """
             const formData = new FormData();
             formData.append("file", chunk);
             formData.append("upload_preset", unsignedPreset);
+            // Agar naam diya hai toh hi bhejenge, warna Cloudinary khud naam rakh lega
             if(safeName) formData.append("public_id", safeName);
 
-            status.innerText = `Part ${i+1}/${totalChunks} ja raha hai...`;
+            status.innerText = `Tukda ${i+1}/${totalChunks} ja raha hai...`;
 
             try {
                 const response = await fetch(url, {
@@ -114,14 +114,14 @@ HTML_TEMPLATE = """
                     }
                 });
                 if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.error.message);
+                    const errorJson = await response.json();
+                    throw new Error(errorJson.error.message);
                 }
                 const percent = Math.round((end / file.size) * 100);
                 fill.style.width = percent + "%";
-                status.innerText = "Progress: " + percent + "%";
+                status.innerText = "Upload: " + percent + "%";
             } catch (err) {
-                alert("Galti: " + err.message);
+                alert("Cloudinary Error: " + err.message);
                 return;
             }
         }
@@ -146,16 +146,15 @@ def index():
 @app.route('/delete-page')
 def delete_page():
     pid = request.args.get('pid')
-    return render_template_string('<body style="text-align:center;padding:50px;"><h3>Mita dein: {{pid}}?</h3><form action="/confirm-del" method="post"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Password" required><br><br><button type="submit">DELETE</button></form></body>', pid=pid)
+    return render_template_string('<body style="text-align:center;padding:50px;"><h3>Mita dein: {{pid}}?</h3><form action="/confirm-del" method="post"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required><br><br><button type="submit">DELETE</button></form></body>', pid=pid)
 
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():
     if request.form.get('pw') == ADMIN_PASSWORD:
         import cloudinary.uploader
         cloudinary.uploader.destroy(request.form.get('pid'), resource_type="video")
-        return "Mita diya gaya! <a href='/'>Wapas jayein</a>"
-    return "Password galat hai!"
+        return "Deleted! <a href='/'>Back</a>"
+    return "Wrong!"
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

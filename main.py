@@ -25,14 +25,16 @@ HOME_HTML = """
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { font-family: sans-serif; background: #f4f4f4; margin: 0; padding: 10px; }
-        .header { display: flex; justify-content: space-between; align-items: center; background: white; padding: 10px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .header { background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); text-align: center; }
+        .search-box { margin: 15px 0; display: flex; gap: 5px; }
+        .search-box input { flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #ccc; }
         .card { background: white; margin: 15px auto; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         .thumb { width: 100%; height: auto; max-height: 180px; border-radius: 8px; background: #000; }
-        .btn { text-decoration: none; display: block; margin: 5px 0; padding: 10px; border-radius: 5px; font-weight: bold; text-align:center; color: white; }
-        .btn-blue { background: #0078d7; }
-        .btn-green { background: #28a745; font-size: 12px; padding: 8px 15px; }
+        .btn { text-decoration: none; display: block; margin: 5px 0; padding: 10px; border-radius: 5px; font-weight: bold; text-align:center; color: white; border: none; }
+        .btn-blue { background: #0078d7; width: 100%; }
+        .btn-green { background: #28a745; font-size: 12px; padding: 10px 20px; display: inline-block; }
         .pagination { display: flex; justify-content: center; gap: 10px; padding: 20px; }
-        .btn-nav { background: #333; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; font-weight: bold; }
+        .btn-nav { background: #333; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; }
         .btn-group { display: flex; gap: 5px; margin-top: 10px; }
         .btn-del { background: #dc3545; flex: 1; font-size: 11px; }
         .btn-edit { background: #f39c12; flex: 1; font-size: 11px; }
@@ -40,11 +42,20 @@ HOME_HTML = """
 </head>
 <body>
     <div class="header">
-        <b style="color:#0078d7;">JioTube Pro</b>
-        <a href="/login" class="btn btn-green">Upload 📤</a>
+        <b style="color:#0078d7; font-size: 20px;">JioTube Pro</b><br><br>
+        <a href="/login" class="btn btn-green">Upload Video 📤</a>
+        
+        <form action="/" method="GET" class="search-box">
+            <input type="text" name="q" placeholder="Video dhoondein..." value="{{ search_query }}">
+            <button type="submit" style="background:#0078d7; color:white; border:none; padding:10px; border-radius:5px; font-weight:bold;">Search</button>
+        </form>
     </div>
 
     <div align="center">
+        {% if not videos %}
+            <p style="margin-top:20px; color:#666;">Koi video nahi mili!</p>
+        {% endif %}
+        
         {% for v in videos %}
         <div class="card">
             <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/300x150?text=Video';">
@@ -59,12 +70,11 @@ HOME_HTML = """
     </div>
 
     <div class="pagination">
-        {% if prev_cursor %}
-            <a href="/?next_cursor={{ prev_cursor }}" class="btn-nav"><< Back</a>
-        {% endif %}
-        
         {% if next_cursor %}
-            <a href="/?next_cursor={{ next_cursor }}" class="btn-nav">Next >></a>
+            <a href="/?next_cursor={{ next_cursor }}&q={{ search_query }}" class="btn-nav">Next Page >></a>
+        {% endif %}
+        {% if request.args.get('next_cursor') %}
+            <a href="/" class="btn-nav">First Page</a>
         {% endif %}
     </div>
 </body>
@@ -74,42 +84,44 @@ HOME_HTML = """
 @app.route('/')
 def index():
     cursor = request.args.get('next_cursor')
+    query = request.args.get('q', '')
     try:
-        # Cloudinary API se data lena
-        res = cloudinary.api.resources(resource_type="video", type="upload", max_results=10, next_cursor=cursor)
+        # Search query ke saath resources load karna
+        if query:
+            res = cloudinary.api.resources(resource_type="video", type="upload", max_results=10, next_cursor=cursor, prefix=query)
+        else:
+            res = cloudinary.api.resources(resource_type="video", type="upload", max_results=10, next_cursor=cursor)
+            
         videos = res.get('resources', [])
         nxt = res.get('next_cursor')
-        
-        # Note: Cloudinary direct 'previous_cursor' nahi deta, 
-        # isliye browser ke back button ya history ka logic simple rakha hai.
-        # Lekin UI mein buttons hamesha dikhenge jab data hoga.
-    except: 
+    except:
         videos, nxt = [], None
         
-    return render_template_string(HOME_HTML, videos=videos, next_cursor=nxt, prev_cursor=None)
+    return render_template_string(HOME_HTML, videos=videos, next_cursor=nxt, search_query=query)
 
+# --- LOGIN & UPLOAD (No JS) ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         if request.form.get('pw') == ADMIN_PASSWORD:
             return render_template_string('''
                 <body style="text-align:center; padding:30px; font-family:sans-serif;">
-                    <h3>Upload Panel</h3>
+                    <h3>Admin Upload</h3>
                     <form action="/do-upload" method="POST" enctype="multipart/form-data">
                         <input type="file" name="file" required><br><br>
-                        <input type="text" name="vname" placeholder="Video ka naam" required style="padding:10px; width:80%;"><br><br>
-                        <button type="submit" style="background:#28a745; color:white; padding:15px; width:85%; border:none; border-radius:5px; font-weight:bold;">START UPLOAD</button>
+                        <input type="text" name="vname" placeholder="Video Name" required style="padding:10px; width:80%;"><br><br>
+                        <button type="submit" style="background:#28a745; color:white; padding:15px; width:85%; border:none; border-radius:5px; font-weight:bold;">UPLOAD</button>
                     </form>
-                    <br><a href="/">Back</a>
+                    <br><a href="/">Cancel</a>
                 </body>
             ''')
-        return "Galat Password! <a href='/login'>Try Again</a>"
+        return "Wrong Password! <a href='/login'>Try Again</a>"
     return '''
         <body style="text-align:center; padding:50px; font-family:sans-serif;">
-            <h3>Admin Login</h3>
+            <h3>Login</h3>
             <form method="POST">
-                <input type="password" name="pw" placeholder="Password" required style="padding:10px; width:70%;"><br><br>
-                <button type="submit" style="background:#333; color:white; padding:10px 30px; border:none; border-radius:5px;">Login</button>
+                <input type="password" name="pw" placeholder="Admin Pass" required style="padding:10px; width:70%;"><br><br>
+                <button type="submit" style="background:#333; color:white; padding:10px; border-radius:5px; border:none; width:50%;">Login</button>
             </form>
         </body>
     '''
@@ -121,22 +133,13 @@ def do_upload():
     if file:
         cloudinary.uploader.upload(file, resource_type="video", public_id=vname)
         return redirect(url_for('index'))
-    return "No file! <a href='/login'>Back</a>"
+    return "Fail! <a href='/login'>Back</a>"
 
+# --- RENAME & DELETE ---
 @app.route('/rename-page')
 def rename_page():
     pid = request.args.get('pid')
-    return render_template_string('''
-        <body style="text-align:center; padding:40px;">
-            <h3>Rename: {{pid}}</h3>
-            <form action="/confirm-rename" method="POST">
-                <input type="hidden" name="old_pid" value="{{pid}}">
-                <input type="text" name="new_pid" placeholder="Naya naam" required><br><br>
-                <input type="password" name="pw" placeholder="Password" required><br><br>
-                <button type="submit">Update</button>
-            </form>
-        </body>
-    ''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:40px;"><h3>Rename: {{pid}}</h3><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" placeholder="New Name" required><br><br><input type="password" name="pw" placeholder="Admin Pass" required><br><br><button type="submit">Rename</button></form></body>''', pid=pid)
 
 @app.route('/confirm-rename', methods=['POST'])
 def confirm_rename():
@@ -147,16 +150,7 @@ def confirm_rename():
 @app.route('/delete-page')
 def delete_page():
     pid = request.args.get('pid')
-    return render_template_string('''
-        <body style="text-align:center; padding:50px;">
-            <h3>Delete {{pid}}?</h3>
-            <form action="/confirm-del" method="POST">
-                <input type="hidden" name="pid" value="{{pid}}">
-                <input type="password" name="pw" placeholder="Admin Pass" required><br><br>
-                <button type="submit" style="background:red; color:white; padding:10px;">Confirm</button>
-            </form>
-        </body>
-    ''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:50px;"><h3>Delete {{pid}}?</h3><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required><br><br><button type="submit" style="background:red;color:white;padding:10px;">Confirm</button></form></body>''', pid=pid)
 
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():

@@ -16,7 +16,7 @@ cloudinary.config(
 
 ADMIN_PASSWORD = "809047"
 
-# --- HOME PAGE (Search, List, Pagination) ---
+# --- HOME PAGE ---
 HOME_HTML = """
 <!DOCTYPE html>
 <html>
@@ -67,10 +67,10 @@ HOME_HTML = """
 
     <div class="pagination">
         {% if request.args.get('next_cursor') %}
-            <a href="/" class="btn-nav"><< First Page</a>
+            <a href="/" class="btn-nav"><< Pehla Page</a>
         {% endif %}
         {% if next_cursor %}
-            <a href="/?next_cursor={{ next_cursor }}&q={{ q }}" class="btn-nav">Next Page >></a>
+            <a href="/?next_cursor={{ next_cursor }}&q={{ q }}" class="btn-nav">Agla Page >></a>
         {% endif %}
     </div>
 </body>
@@ -87,31 +87,33 @@ def index():
     except: videos, nxt = [], None
     return render_template_string(HOME_HTML, videos=videos, next_cursor=nxt, q=q)
 
-# --- UPLOAD PANEL (With MediaFire Progress Bar) ---
+# --- UPLOAD PANEL (With Media-Style Progress Bar) ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         if request.form.get('pw') == ADMIN_PASSWORD:
             return render_template_string('''
-                <body style="text-align:center; padding:20px; font-family:sans-serif;">
-                    <div style="background:white; padding:20px; border-radius:10px; border:1px solid #ccc;">
-                        <h3>Live Upload 🚀</h3>
+                <body style="text-align:center; padding:20px; font-family:sans-serif; background:#f4f4f4;">
+                    <div style="background:white; padding:20px; border-radius:10px; border:1px solid #ccc; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                        <h3>Live Uploading 🚀</h3>
                         <form id="upForm">
+                            <label>1. Video File Chunein:</label><br>
                             <input type="file" id="fInp" required style="margin:10px 0;"><br>
-                            <input type="text" id="vInp" placeholder="Video Name" required style="padding:10px; width:85%; margin-bottom:10px;"><br>
+                            <label>2. Video Ka Naam:</label><br>
+                            <input type="text" id="vInp" placeholder="Naam Likhein" required style="padding:10px; width:85%; margin-bottom:10px; border:1px solid #ccc; border-radius:5px;"><br>
                             
-                            <div id="pCont" style="display:none; width:100%; background:#ddd; border-radius:10px; margin:10px 0;">
-                                <div id="pBar" style="width:0%; height:20px; background:#0078d7; border-radius:10px; color:white; font-size:12px; text-align:center;">0%</div>
+                            <div id="pCont" style="display:none; width:100%; background:#ddd; border-radius:10px; margin:15px 0;">
+                                <div id="pBar" style="width:0%; height:20px; background:#28a745; border-radius:10px; color:white; font-size:12px; line-height:20px; text-align:center;">0%</div>
                             </div>
                             
-                            <button type="button" onclick="upNow()" id="upBtn" style="background:#28a745; color:white; padding:15px; width:95%; border:none; border-radius:5px; font-weight:bold;">UPLOAD</button>
+                            <button type="button" onclick="upNow()" id="upBtn" style="background:#28a745; color:white; padding:15px; width:95%; border:none; border-radius:5px; font-weight:bold;">START UPLOAD</button>
                         </form>
                     </div>
                     <script>
                     function upNow() {
                         var f = document.getElementById('fInp').files[0];
                         var n = document.getElementById('vInp').value;
-                        if(!f || !n) return;
+                        if(!f || !n) { alert("Dono bharo!"); return; }
                         var fd = new FormData(); fd.append("file", f); fd.append("vname", n);
                         var x = new XMLHttpRequest();
                         x.upload.onprogress = function(e) {
@@ -123,44 +125,48 @@ def login():
                         x.onreadystatechange = function() { if(x.readyState==4) window.location.href="/"; };
                         x.open("POST", "/do-upload", true);
                         document.getElementById('upBtn').disabled=true;
+                        document.getElementById('upBtn').style.background="#ccc";
                         x.send(fd);
                     }
                     </script>
-                    <br><a href="/">Back</a>
+                    <br><a href="/" style="text-decoration:none; color:black;">← Wapas Jayein</a>
                 </body>
             ''')
-        return "Wrong Pass!"
-    return '''<body style="text-align:center; padding:50px;"><form method="POST"><h3>Admin</h3><input type="password" name="pw"><button type="submit">Login</button></form></body>'''
+        return "Galat Password! <a href='/login'>Dobara Koshish Karein</a>"
+    return '''<body style="text-align:center; padding:50px;"><form method="POST"><h3>Admin Login</h3><input type="password" name="pw" placeholder="Pass"><button type="submit">Login</button></form></body>'''
 
 @app.route('/do-upload', methods=['POST'])
 def do_upload():
     file = request.files.get('file')
     vname = request.form.get('vname').replace(' ', '_')
     if file: cloudinary.uploader.upload(file, resource_type="video", public_id=vname)
-    return "OK"
+    return "SUCCESS"
 
-# --- RENAME & DELETE ---
+# --- SECURE RENAME ---
 @app.route('/rename-page')
 def rename_page():
     pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:40px;"><h3>Rename: {{pid}}</h3><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" placeholder="New Name" required><br><br><input type="password" name="pw" placeholder="Admin Pass" required><br><br><button type="submit">Update</button></form></body>''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:40px; font-family:sans-serif;"><h3>Rename: {{pid}}</h3><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" placeholder="Naya Naam" required style="padding:10px; width:80%;"><br><br><input type="password" name="pw" placeholder="Admin Security Password" required style="padding:10px; width:80%;"><br><br><button type="submit" style="background:#f39c12; color:white; padding:10px 30px; border:none; border-radius:5px;">Update Karein</button></form><br><a href="/">Cancel</a></body>''', pid=pid)
 
 @app.route('/confirm-rename', methods=['POST'])
 def confirm_rename():
     if request.form.get('pw') == ADMIN_PASSWORD:
         cloudinary.uploader.rename(request.form.get('old_pid'), request.form.get('new_pid').replace(' ','_'), resource_type="video")
-    return redirect(url_for('index'))
+        return redirect(url_for('index'))
+    return "Galat Password! Rename nahi hua. <a href='/'>Wapas</a>"
 
+# --- SECURE DELETE ---
 @app.route('/delete-page')
 def delete_page():
     pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:50px;"><h3>Delete?</h3><p>{{pid}}</p><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required><br><br><button type="submit" style="background:red;color:white;padding:10px;">Confirm Delete</button></form></body>''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:50px; font-family:sans-serif;"><h3>Delete Karein?</h3><p style="color:red;">Kya aap sach mein <b>{{pid}}</b> ko hatana chahte hain?</p><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Admin Security Password" required style="padding:10px; width:80%;"><br><br><button type="submit" style="background:#dc3545; color:white; padding:10px 30px; border:none; border-radius:5px;">Hamesha ke liye Delete</button></form><br><a href="/">Nahi, Wapas Jayein</a></body>''', pid=pid)
 
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():
     if request.form.get('pw') == ADMIN_PASSWORD:
         cloudinary.uploader.destroy(request.form.get('pid'), resource_type="video")
-    return redirect(url_for('index'))
+        return redirect(url_for('index'))
+    return "Galat Password! Delete nahi hua. <a href='/'>Wapas</a>"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

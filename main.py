@@ -7,7 +7,7 @@ import requests
 
 app = Flask(__name__)
 
-# Cloudinary Config (Aapki Details)
+# Cloudinary Config
 cloudinary.config(
   cloud_name = "dawterffe",
   api_key = "258318685843824",
@@ -17,7 +17,7 @@ cloudinary.config(
 
 ADMIN_PASSWORD = "809047"
 
-# --- HTML TEMPLATE (Home Page) ---
+# --- HTML TEMPLATE ---
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -42,7 +42,7 @@ HTML_TEMPLATE = """
     <h3 align="center" style="color:#0078d7;">JioTube Pro - Atif Khan</h3>
     
     <div style="background:white; padding:15px; border-radius:10px; margin-bottom:15px; text-align:center; border: 2px solid #0078d7;">
-        <b>🚀 Uploader (Badi File Support)</b><br><br>
+        <b>🚀 Uploader (6MB Chill)</b><br><br>
         <input type="file" id="fileInput">
         <input type="text" id="nameInput" placeholder="Video ka naam...">
         <button onclick="startUpload()" class="btn btn-watch">UPLOAD NOW</button>
@@ -53,14 +53,14 @@ HTML_TEMPLATE = """
     </div>
 
     <form action="/" method="get" style="text-align:center; margin-bottom:15px;">
-        <input type="text" name="q" placeholder="Search video..." style="width:60%; padding:10px; border-radius:5px; border:1px solid #ccc;">
-        <button type="submit" style="padding:10px; background:#333; color:white; border:none; border-radius:5px;">Search</button>
+        <input type="text" name="q" placeholder="Video search karein..." style="width:60%; padding:10px; border-radius:5px; border:1px solid #ccc;">
+        <button type="submit" style="padding:10px; background:#333; color:white; border:none; border-radius:5px;">Go</button>
     </form>
 
     <div align="center">
         {% for v in videos %}
         <div class="card">
-            <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/300x150?text=JioTube';">
+            <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/300x150?text=Processing';">
             <h4 style="margin: 10px 0;">{{ v.public_id }}</h4>
             <a href="{{ v.secure_url }}" class="btn btn-watch">Watch / Download</a>
             <a href="/delete-page?pid={{ v.public_id }}" class="btn btn-del">Delete</a>
@@ -70,7 +70,7 @@ HTML_TEMPLATE = """
 
     <div style="text-align:center; padding:20px;">
         {% if next_cursor %}
-        <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" style="background:#333; color:white; padding:12px 20px; text-decoration:none; border-radius:5px; font-weight:bold; display:inline-block; margin-right:5px;">Next Page >></a>
+        <a href="/?next_cursor={{ next_cursor }}{% if query %}&q={{ query }}{% endif %}" style="background:#333; color:white; padding:12px 20px; text-decoration:none; border-radius:5px; font-weight:bold; display:inline-block; margin-right:5px;">Next >></a>
         {% endif %}
         <a href="/ai-chat" class="btn-ai">Ask AI 🤖</a>
     </div>
@@ -78,7 +78,7 @@ HTML_TEMPLATE = """
     <script>
     async function startUpload() {
         const file = document.getElementById('fileInput').files[0];
-        if(!file) return alert("Pehle file chuno!");
+        if(!file) return alert("Pehle file select karein!");
         let safeName = document.getElementById('nameInput').value.trim().replace(/[^a-zA-Z0-9]/g, '_');
         document.getElementById('p-wrap').style.display = 'block';
         const status = document.getElementById('status');
@@ -96,13 +96,13 @@ HTML_TEMPLATE = """
             formData.append("upload_preset", "ml_default");
             formData.append("resource_type", "video");
             if(safeName) formData.append("public_id", safeName);
-            status.innerText = `Sending Part ${i+1}/${totalChunks}...`;
+            status.innerText = `Sending ${i+1}/${totalChunks}...`;
             const res = await fetch(url, {
                 method: 'POST',
                 body: formData,
                 headers: { 'X-Unique-Upload-Id': uniqueId, 'Content-Range': `bytes ${start}-${end-1}/${file.size}` }
             });
-            if(!res.ok) return alert("Upload Fail! (Check 100MB Limit)");
+            if(!res.ok) return alert("Upload Fail! Check 100MB Limit.");
             fill.style.width = Math.round((end/file.size)*100) + "%";
         }
         location.reload();
@@ -127,14 +127,13 @@ def index():
 @app.route('/ai-chat')
 def ai_chat_page():
     return '''
-    <body style="font-family:sans-serif; padding:20px; background:#f4f4f4; text-align:center;">
-        <h3>Jio AI Assistant</h3>
-        <form action="/ai-ask" method="POST" onsubmit="document.getElementById('ld').innerText='AI Soch raha hai...';">
-            <input type="text" name="question" placeholder="Sawal likhein..." required style="width:90%; padding:15px; border-radius:10px; border:1px solid #ccc;"><br><br>
+    <body style="font-family:sans-serif; padding:20px; text-align:center; background:#f4f4f4;">
+        <h3>Jio AI - Atif Khan</h3>
+        <form action="/ai-ask" method="POST">
+            <input type="text" name="question" placeholder="Sawwal puchein..." required style="width:90%; padding:15px; border-radius:10px; border:1px solid #ccc;"><br><br>
             <button type="submit" style="width:90%; background:#8e44ad; color:white; padding:15px; border:none; border-radius:10px; font-weight:bold;">ENTER</button>
         </form>
-        <p id="ld" style="color:#8e44ad; font-weight:bold;"></p>
-        <br><a href="/" style="text-decoration:none; color:#333;">Back Home</a>
+        <br><a href="/" style="text-decoration:none; color:#333;">Home</a>
     </body>
     '''
 
@@ -142,18 +141,20 @@ def ai_chat_page():
 def ai_ask():
     user_q = request.form.get('question')
     try:
-        # SimSimi API (Fast and Urdu/Hindi support)
-        response = requests.get(f"https://api.simsimi.vn/v1/simtalk", params={"text": user_q, "lc": "en"}, timeout=8)
-        answer = response.json().get('message', 'Samajh nahi aaya, phir se puchein.')
+        # PURE TEXT AI - NO PARAMETER ERROR
+        api_url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q={user_q}"
+        # Alternative light-weight AI
+        res = requests.get(f"https://api.popcat.xyz/chatbot?msg={user_q}&owner=Atif&botname=JioAI", timeout=10)
+        answer = res.json().get('response', 'Dobara puchein.')
     except:
-        answer = "Abhi busy hoon, 1 minute baad try karein!"
+        answer = "Abhi busy hoon, 1 min baad try karein!"
     
     return f'''
     <body style="font-family:sans-serif; padding:20px;">
         <h4 style="color:#8e44ad;">Sawal: {user_q}</h4>
         <p style="font-size:18px;"><b>Jawab:</b> {answer}</p>
         <hr>
-        <a href="/ai-chat" style="display:block; text-align:center; background:#0078d7; color:white; padding:12px; text-decoration:none; border-radius:10px;">Agla Sawal</a>
+        <a href="/ai-chat" style="display:block; text-align:center; background:#0078d7; color:white; padding:12px; text-decoration:none; border-radius:10px;">Ek aur Sawal</a>
         <br><a href="/" style="display:block; text-align:center; color:#333;">Home</a>
     </body>
     '''
@@ -161,14 +162,14 @@ def ai_ask():
 @app.route('/delete-page')
 def delete_page():
     pid = request.args.get('pid')
-    return render_template_string('<body style="text-align:center;padding:50px;"><h3>Delete?</h3><form action="/confirm-del" method="post"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required><br><br><button type="submit" style="background:red;color:white;padding:10px;">DELETE</button></form></body>', pid=pid)
+    return render_template_string('<body style="text-align:center;padding:50px;"><h3>Delete?</h3><form action="/confirm-del" method="post"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required><br><br><button type="submit" style="background:red;color:white;padding:10px;border:none;border-radius:5px;">Confirm Delete</button></form></body>', pid=pid)
 
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():
     if request.form.get('pw') == ADMIN_PASSWORD:
         cloudinary.uploader.destroy(request.form.get('pid'), resource_type="video")
-        return "Deleted! <a href='/'>Back</a>"
-    return "Wrong Password!"
+        return "Mita diya gaya! <a href='/'>Back</a>"
+    return "Galat Password!"
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

@@ -16,7 +16,7 @@ cloudinary.config(
 
 ADMIN_PASSWORD = "809047"
 
-# --- HOME PAGE (Jio Bharat Fit Design) ---
+# --- HOME PAGE (Thumbnail + 3GP Optimize) ---
 HOME_HTML = """
 <!DOCTYPE html>
 <html>
@@ -24,38 +24,48 @@ HOME_HTML = """
     <title>JioTube Pro</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        body { font-family: sans-serif; background: #f4f4f4; margin: 0; padding: 5px; width: 100%; box-sizing: border-box; }
-        .header { background: white; padding: 10px; border-radius: 5px; text-align: center; margin-bottom: 10px; }
-        .search-box { margin: 10px 0; display: flex; gap: 2px; }
-        .search-box input { flex: 1; padding: 8px; border-radius: 3px; border: 1px solid #ccc; font-size: 12px; }
-        .card { background: white; margin-bottom: 10px; padding: 8px; border-radius: 5px; text-align: center; border: 1px solid #ddd; }
-        .thumb { width: 100%; height: auto; border-radius: 3px; background: #000; }
-        .btn { text-decoration: none; display: block; margin: 5px 0; padding: 8px; border-radius: 3px; font-weight: bold; text-align:center; color: white; font-size: 13px; }
+        body { font-family: sans-serif; background: #f4f4f4; margin: 0; padding: 5px; width: 100%; overflow-x: hidden; }
+        .header { background: white; padding: 10px; border-radius: 5px; text-align: center; margin-bottom: 10px; border: 1px solid #ddd; }
+        .search-box { margin: 8px 0; display: flex; gap: 2px; }
+        .search-box input { flex: 1; padding: 6px; border-radius: 3px; border: 1px solid #ccc; font-size: 11px; }
+        .card { background: white; margin-bottom: 10px; padding: 5px; border-radius: 5px; text-align: center; border: 1px solid #ddd; }
+        
+        /* Thumbnail Style */
+        .thumb-container { width: 100%; position: relative; background: #000; border-radius: 3px; line-height: 0; }
+        .thumb { width: 100%; height: auto; border-radius: 3px; }
+        
+        .btn { text-decoration: none; display: block; margin: 4px 0; padding: 8px; border-radius: 3px; font-weight: bold; text-align:center; color: white; font-size: 12px; }
         .btn-blue { background: #0078d7; }
-        .btn-green { background: #28a745; display: inline-block; padding: 5px 15px; }
-        .btn-group { display: flex; gap: 4px; margin-top: 8px; }
-        .btn-del { background: #dc3545; flex: 1; font-size: 11px; padding: 6px; }
-        .btn-edit { background: #f39c12; flex: 1; font-size: 11px; padding: 6px; }
-        .pagination { display: flex; justify-content: center; gap: 10px; padding: 10px; }
-        .btn-nav { background: #333; color: white; padding: 8px 12px; text-decoration: none; border-radius: 3px; font-size: 12px; }
+        .btn-green { background: #28a745; display: inline-block; padding: 4px 12px; font-size: 11px; }
+        .btn-group { display: flex; gap: 3px; margin-top: 5px; }
+        .btn-del { background: #dc3545; flex: 1; font-size: 10px; padding: 5px; }
+        .btn-edit { background: #f39c12; flex: 1; font-size: 10px; padding: 5px; }
+        .pagination { display: flex; justify-content: center; gap: 8px; padding: 10px; }
+        .btn-nav { background: #333; color: white; padding: 6px 10px; text-decoration: none; border-radius: 3px; font-size: 11px; }
     </style>
 </head>
 <body>
     <div class="header">
-        <b style="color:#0078d7; font-size: 18px;">JioTube Pro</b><br>
+        <b style="color:#0078d7; font-size: 16px;">JioTube Pro</b><br>
         <a href="/login" class="btn btn-green">Upload</a>
         
         <form action="/" method="GET" class="search-box">
-            <input type="text" name="q" placeholder="Dhoondein..." value="{{ q }}">
-            <button type="submit" style="background:#0078d7; color:white; border:none; padding:8px; border-radius:3px;">Ok</button>
+            <input type="text" name="q" placeholder="Video dhoondein..." value="{{ q }}">
+            <button type="submit" style="background:#0078d7; color:white; border:none; padding:6px; border-radius:3px;">Ok</button>
         </form>
     </div>
 
     <div align="center">
         {% for v in videos %}
         <div class="card">
-            <h4 style="margin: 5px 0; font-size:12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ v.public_id }}</h4>
-            <a href="{{ v.secure_url }}" class="btn btn-blue">Watch Video</a>
+            <div class="thumb-container">
+                <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/150x100?text=No+Preview';">
+            </div>
+            <h4 style="margin: 5px 0; font-size:11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ v.public_id }}</h4>
+            
+            {% set video_url = v.secure_url.rsplit('.', 1)[0] + '.3gp' %}
+            <a href="{{ video_url }}" class="btn btn-blue">Watch 3GP</a>
+            
             <div class="btn-group">
                 <a href="/rename-page?pid={{ v.public_id }}" class="btn btn-edit">Rename</a>
                 <a href="/delete-page?pid={{ v.public_id }}" class="btn btn-del">Delete</a>
@@ -76,6 +86,8 @@ HOME_HTML = """
 </html>
 """
 
+# --- REST OF THE CODE (Login, Upload, Rename, Delete remains same and secure) ---
+
 @app.route('/')
 def index():
     cursor = request.args.get('next_cursor')
@@ -94,8 +106,8 @@ def login():
                 <body style="text-align:center; padding:10px; font-family:sans-serif;">
                     <h3>Upload Panel</h3>
                     <form id="upForm">
-                        <input type="file" id="fInp" required style="width:90%;"><br><br>
-                        <input type="text" id="vInp" placeholder="Video Name" required style="width:85%; padding:8px;"><br><br>
+                        <input type="file" id="fInp" required><br><br>
+                        <input type="text" id="vInp" placeholder="Video Name" required style="width:80%; padding:8px;"><br><br>
                         <div id="pCont" style="display:none; width:100%; background:#ddd; height:15px; border-radius:5px; margin-bottom:10px;">
                             <div id="pBar" style="width:0%; height:100%; background:#28a745; border-radius:5px; color:white; font-size:10px; text-align:center;"></div>
                         </div>
@@ -123,7 +135,7 @@ def login():
                     <br><a href="/">Back</a>
                 </body>
             ''')
-    return '''<body style="text-align:center; padding:50px;"><form method="POST"><h3>Login</h3><input type="password" name="pw" style="padding:10px;"><br><br><button type="submit">Login</button></form></body>'''
+    return '''<body style="text-align:center; padding:50px;"><form method="POST"><h3>Login</h3><input type="password" name="pw"><button type="submit">Go</button></form></body>'''
 
 @app.route('/do-upload', methods=['POST'])
 def do_upload():
@@ -135,7 +147,7 @@ def do_upload():
 @app.route('/rename-page')
 def rename_page():
     pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Rename</h3><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" placeholder="Naya Naam" required style="width:80%; padding:8px;"><br><br><input type="password" name="pw" placeholder="Password" required style="width:80%; padding:8px;"><br><br><button type="submit" style="background:#f39c12; color:white; padding:10px;">Update</button></form></body>''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Rename</h3><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" placeholder="New Name" required style="width:80%; padding:8px;"><br><br><input type="password" name="pw" placeholder="Pass" required style="width:80%; padding:8px;"><br><br><button type="submit">Update</button></form></body>''', pid=pid)
 
 @app.route('/confirm-rename', methods=['POST'])
 def confirm_rename():
@@ -146,7 +158,7 @@ def confirm_rename():
 @app.route('/delete-page')
 def delete_page():
     pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Delete?</h3><p>{{pid}}</p><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Password" required style="width:80%; padding:8px;"><br><br><button type="submit" style="background:#dc3545; color:white; padding:10px;">Delete</button></form></body>''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Delete?</h3><p>{{pid}}</p><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required style="width:80%; padding:8px;"><br><br><button type="submit" style="background:red; color:white;">Confirm Delete</button></form></body>''', pid=pid)
 
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():

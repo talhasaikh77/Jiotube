@@ -6,7 +6,7 @@ import cloudinary.uploader
 
 app = Flask(__name__)
 
-# Cloudinary Config (Aapka Account)
+# Cloudinary Config
 cloudinary.config(
   cloud_name = "dawterffe",
   api_key = "258318685843824",
@@ -14,10 +14,9 @@ cloudinary.config(
   secure = True
 )
 
-# Aapka Main Password
 ADMIN_PASSWORD = "809047"
 
-# --- HOME PAGE UI (Simple, Fit & No Emojis) ---
+# --- HOME PAGE UI ---
 HOME_HTML = """
 <!DOCTYPE html>
 <html>
@@ -37,28 +36,27 @@ HOME_HTML = """
         .btn-group { display: flex; gap: 3px; margin-top: 5px; }
         .btn-del { background: #dc3545; flex: 1; font-size: 10px; padding: 6px; }
         .btn-edit { background: #f39c12; flex: 1; font-size: 10px; padding: 6px; }
-        .pagination { display: flex; justify-content: center; gap: 8px; padding: 10px; }
-        .btn-nav { background: #333; color: white; padding: 8px 12px; text-decoration: none; border-radius: 3px; font-size: 12px; }
+        .pagination { display: flex; justify-content: center; gap: 8px; padding: 15px; }
+        .btn-nav { background: #333; color: white; padding: 8px 12px; text-decoration: none; border-radius: 3px; font-size: 12px; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="header">
         <b style="color:#0078d7; font-size: 18px;">JioTube Pro</b><br>
         <a href="/login" class="btn btn-green">Upload Video</a>
-        
         <form action="/" method="GET" class="search-box">
             <input type="text" name="q" placeholder="Video dhoondein..." value="{{ q }}">
-            <button type="submit" style="background:#0078d7; color:white; border:none; padding:8px; border-radius:3px; font-weight:bold;">Search</button>
+            <button type="submit" style="background:#0078d7; color:white; border:none; padding:8px; border-radius:3px;">Search</button>
         </form>
     </div>
 
     <div align="center">
         {% if not videos %}
-            <p style="font-size:12px; color:#666; padding:20px;">Koi video nahi mili!<br><a href="/">Wapas Jayein</a></p>
+            <p style="font-size:12px; color:#666; padding:20px;">Kuch nahi mila!<br><br><a href="/" class="btn-nav">Home</a></p>
         {% endif %}
         {% for v in videos %}
         <div class="card">
-            <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/150x100?text=Processing';">
+            <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/150x100?text=Video';">
             <h4 style="margin: 5px 0; font-size:12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ v.public_id }}</h4>
             <a href="{{ v.secure_url }}" class="btn btn-blue">Watch Video</a>
             <div class="btn-group">
@@ -70,11 +68,11 @@ HOME_HTML = """
     </div>
 
     <div class="pagination">
-        {% if request.args.get('q') or request.args.get('next_cursor') %}
-            <a href="/" class="btn-nav">Home</a>
+        {% if q or next_cursor or request.args.get('next_cursor') %}
+            <a href="/" class="btn-nav">Main Page</a>
         {% endif %}
-        {% if next_cursor and not q %}
-            <a href="/?next_cursor={{ next_cursor }}" class="btn-nav">Next >></a>
+        {% if next_cursor %}
+            <a href="/?next_cursor={{ next_cursor }}&q={{ q }}" class="btn-nav">Next >></a>
         {% endif %}
     </div>
 </body>
@@ -85,43 +83,38 @@ HOME_HTML = """
 def index():
     cursor = request.args.get('next_cursor')
     q = request.args.get('q', '').strip().lower()
-    
     try:
-        # Step 1: Saari videos mangwao (Up to 100 results)
-        res = cloudinary.api.resources(resource_type="video", type="upload", max_results=100)
-        all_videos = res.get('resources', [])
+        # Step 1: Pehle 50 videos tak mangwao taaki search area bada ho
+        res = cloudinary.api.resources(resource_type="video", type="upload", max_results=50, next_cursor=cursor)
+        all_vids = res.get('resources', [])
         
         if q:
-            # Step 2: Smart Manual Filter (Partial Match)
-            # Agar 'public_id' mein kahin bhi user ka 'q' hai, toh dikhao
-            videos = [v for v in all_videos if q in v.get('public_id', '').lower()]
-            nxt = None
+            # Step 2: Smart Filter (Saari 50 videos mein dhoondega)
+            videos = [v for v in all_vids if q in v.get('public_id', '').lower()]
+            nxt = None # Search mein pagination server handle karta hai
         else:
-            # Normal Mode: 10 videos at a time
-            videos = all_videos[:10]
-            nxt = res.get('next_cursor') if len(all_videos) > 10 else None
-            
-    except Exception as e:
-        print(f"Error: {e}")
+            # Step 3: Normal Mode (Sirf 10 videos aur Next button)
+            videos = all_vids[:10]
+            nxt = res.get('next_cursor') if len(all_vids) > 10 else None
+    except:
         videos, nxt = [], None
-        
     return render_template_string(HOME_HTML, videos=videos, next_cursor=nxt, q=q)
 
-# --- LOGIN & UPLOAD (With Progress Bar) ---
+# --- LOGIN & UPLOAD ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         if request.form.get('pw') == ADMIN_PASSWORD:
             return render_template_string('''
                 <body style="text-align:center; padding:15px; font-family:sans-serif;">
-                    <h3>Upload Video</h3>
+                    <h3>Upload Panel</h3>
                     <form id="upForm">
-                        <input type="file" id="fInp" required style="width:90%;"><br><br>
-                        <input type="text" id="vInp" placeholder="Video Ka Naam" required style="width:85%; padding:10px;"><br><br>
+                        <input type="file" id="fInp" required><br><br>
+                        <input type="text" id="vInp" placeholder="Video Name" required style="width:85%; padding:10px;"><br><br>
                         <div id="pCont" style="display:none; width:100%; background:#ddd; height:20px; border-radius:10px; margin-bottom:15px;">
                             <div id="pBar" style="width:0%; height:100%; background:#28a745; border-radius:10px; color:white; font-size:12px; text-align:center; line-height:20px;">0%</div>
                         </div>
-                        <button type="button" onclick="upNow()" id="upBtn" style="background:#28a745; color:white; padding:15px; width:95%; border:none; border-radius:5px; font-weight:bold;">UPLOAD START</button>
+                        <button type="button" onclick="upNow()" id="upBtn" style="background:#28a745; color:white; padding:15px; width:95%; border:none; border-radius:5px; font-weight:bold;">START UPLOAD</button>
                     </form>
                     <script>
                     function upNow() {
@@ -142,24 +135,22 @@ def login():
                         x.send(fd);
                     }
                     </script>
-                    <br><br><a href="/">Wapas Jayein</a>
+                    <br><a href="/">Back</a>
                 </body>
             ''')
-    return '''<body style="text-align:center; padding:50px;"><form method="POST"><h3>Admin Login</h3><input type="password" name="pw" style="padding:10px;"><br><br><button type="submit">Login</button></form></body>'''
+    return '''<body style="text-align:center; padding:50px;"><form method="POST"><h3>Admin</h3><input type="password" name="pw"><button type="submit">Go</button></form></body>'''
 
 @app.route('/do-upload', methods=['POST'])
 def do_upload():
     file = request.files.get('file')
     vname = request.form.get('vname').replace(' ', '_')
-    if file:
-        cloudinary.uploader.upload(file, resource_type="video", public_id=vname)
+    if file: cloudinary.uploader.upload(file, resource_type="video", public_id=vname)
     return "OK"
 
-# --- RENAME & DELETE (With Password Security) ---
 @app.route('/rename-page')
 def rename_page():
     pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Rename</h3><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" placeholder="Naya Naam" required style="width:80%; padding:10px;"><br><br><input type="password" name="pw" placeholder="Admin Pass" required style="width:80%; padding:10px;"><br><br><button type="submit" style="background:#f39c12; color:white; padding:10px; width:80%;">Update</button></form></body>''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Rename</h3><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" placeholder="New Name" required style="width:80%; padding:10px;"><br><br><input type="password" name="pw" placeholder="Pass" required style="width:80%; padding:10px;"><br><br><button type="submit" style="background:#f39c12; color:white; padding:10px; width:80%;">Update</button></form></body>''', pid=pid)
 
 @app.route('/confirm-rename', methods=['POST'])
 def confirm_rename():
@@ -170,7 +161,7 @@ def confirm_rename():
 @app.route('/delete-page')
 def delete_page():
     pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Delete?</h3><p>{{pid}}</p><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Admin Pass" required style="width:80%; padding:10px;"><br><br><button type="submit" style="background:red; color:white; padding:10px; width:80%;">Hamesha ke liye Delete</button></form></body>''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Delete?</h3><p>{{pid}}</p><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required style="width:80%; padding:10px;"><br><br><button type="submit" style="background:red; color:white; padding:10px; width:80%;">Delete</button></form></body>''', pid=pid)
 
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():

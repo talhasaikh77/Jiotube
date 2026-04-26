@@ -16,7 +16,7 @@ cloudinary.config(
 
 ADMIN_PASSWORD = "809047"
 
-# --- HOME PAGE (Thumbnail + 3GP Optimize) ---
+# --- HOME PAGE (Compact UI for Jio Bharat) ---
 HOME_HTML = """
 <!DOCTYPE html>
 <html>
@@ -29,11 +29,7 @@ HOME_HTML = """
         .search-box { margin: 8px 0; display: flex; gap: 2px; }
         .search-box input { flex: 1; padding: 6px; border-radius: 3px; border: 1px solid #ccc; font-size: 11px; }
         .card { background: white; margin-bottom: 10px; padding: 5px; border-radius: 5px; text-align: center; border: 1px solid #ddd; }
-        
-        /* Thumbnail Style */
-        .thumb-container { width: 100%; position: relative; background: #000; border-radius: 3px; line-height: 0; }
-        .thumb { width: 100%; height: auto; border-radius: 3px; }
-        
+        .thumb { width: 100%; height: auto; border-radius: 3px; background: #000; }
         .btn { text-decoration: none; display: block; margin: 4px 0; padding: 8px; border-radius: 3px; font-weight: bold; text-align:center; color: white; font-size: 12px; }
         .btn-blue { background: #0078d7; }
         .btn-green { background: #28a745; display: inline-block; padding: 4px 12px; font-size: 11px; }
@@ -48,7 +44,6 @@ HOME_HTML = """
     <div class="header">
         <b style="color:#0078d7; font-size: 16px;">JioTube Pro</b><br>
         <a href="/login" class="btn btn-green">Upload</a>
-        
         <form action="/" method="GET" class="search-box">
             <input type="text" name="q" placeholder="Video dhoondein..." value="{{ q }}">
             <button type="submit" style="background:#0078d7; color:white; border:none; padding:6px; border-radius:3px;">Ok</button>
@@ -58,13 +53,10 @@ HOME_HTML = """
     <div align="center">
         {% for v in videos %}
         <div class="card">
-            <div class="thumb-container">
-                <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/150x100?text=No+Preview';">
-            </div>
+            <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/150x100?text=Video';">
             <h4 style="margin: 5px 0; font-size:11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ v.public_id }}</h4>
             
-            {% set video_url = v.secure_url.rsplit('.', 1)[0] + '.3gp' %}
-            <a href="{{ video_url }}" class="btn btn-blue">Watch 3GP</a>
+            <a href="{{ v.secure_url }}" class="btn btn-blue">Watch Video</a>
             
             <div class="btn-group">
                 <a href="/rename-page?pid={{ v.public_id }}" class="btn btn-edit">Rename</a>
@@ -86,7 +78,7 @@ HOME_HTML = """
 </html>
 """
 
-# --- REST OF THE CODE (Login, Upload, Rename, Delete remains same and secure) ---
+# --- LOGIN, UPLOAD, RENAME, DELETE (Same Secure Logic) ---
 
 @app.route('/')
 def index():
@@ -147,7 +139,7 @@ def do_upload():
 @app.route('/rename-page')
 def rename_page():
     pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Rename</h3><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" placeholder="New Name" required style="width:80%; padding:8px;"><br><br><input type="password" name="pw" placeholder="Pass" required style="width:80%; padding:8px;"><br><br><button type="submit">Update</button></form></body>''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Rename</h3><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" placeholder="Naya Naam" required style="width:80%; padding:8px;"><br><br><input type="password" name="pw" placeholder="Pass" required style="width:80%; padding:8px;"><br><br><button type="submit">Update</button></form></body>''', pid=pid)
 
 @app.route('/confirm-rename', methods=['POST'])
 def confirm_rename():
@@ -158,7 +150,7 @@ def confirm_rename():
 @app.route('/delete-page')
 def delete_page():
     pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Delete?</h3><p>{{pid}}</p><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required style="width:80%; padding:8px;"><br><br><button type="submit" style="background:red; color:white;">Confirm Delete</button></form></body>''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Delete?</h3><p>{{pid}}</p><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required style="width:80%; padding:8px;"><br><br><button type="submit" style="background:red; color:white;">Delete</button></form></body>''', pid=pid)
 
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():

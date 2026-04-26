@@ -37,7 +37,7 @@ HOME_HTML = """
         .btn-del { background: #dc3545; flex: 1; font-size: 10px; padding: 6px; }
         .btn-edit { background: #f39c12; flex: 1; font-size: 10px; padding: 6px; }
         .pagination { display: flex; justify-content: center; gap: 8px; padding: 15px; }
-        .btn-nav { background: #333; color: white; padding: 8px 12px; text-decoration: none; border-radius: 3px; font-size: 12px; font-weight: bold; }
+        .btn-nav { background: #333; color: white; padding: 8px 15px; text-decoration: none; border-radius: 3px; font-size: 12px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -46,7 +46,7 @@ HOME_HTML = """
         <a href="/login" class="btn btn-green">Upload Video</a>
         <form action="/" method="GET" class="search-box">
             <input type="text" name="q" placeholder="Video dhoondein..." value="{{ q }}">
-            <button type="submit" style="background:#0078d7; color:white; border:none; padding:8px; border-radius:3px;">Search</button>
+            <button type="submit" style="background:#0078d7; color:white; border:none; padding:8px; border-radius:3px;">Ok</button>
         </form>
     </div>
 
@@ -71,8 +71,8 @@ HOME_HTML = """
         {% if q or next_cursor or request.args.get('next_cursor') %}
             <a href="/" class="btn-nav">Main Page</a>
         {% endif %}
-        {% if next_cursor %}
-            <a href="/?next_cursor={{ next_cursor }}&q={{ q }}" class="btn-nav">Next >></a>
+        {% if next_cursor and not q %}
+            <a href="/?next_cursor={{ next_cursor }}" class="btn-nav">Next Page >></a>
         {% endif %}
     </div>
 </body>
@@ -84,30 +84,30 @@ def index():
     cursor = request.args.get('next_cursor')
     q = request.args.get('q', '').strip().lower()
     try:
-        # Step 1: Pehle 50 videos tak mangwao taaki search area bada ho
-        res = cloudinary.api.resources(resource_type="video", type="upload", max_results=50, next_cursor=cursor)
-        all_vids = res.get('resources', [])
-        
         if q:
-            # Step 2: Smart Filter (Saari 50 videos mein dhoondega)
+            # Smart Search: Saari list se filter karega (Next ki zarurat nahi)
+            res = cloudinary.api.resources(resource_type="video", type="upload", max_results=100)
+            all_vids = res.get('resources', [])
             videos = [v for v in all_vids if q in v.get('public_id', '').lower()]
-            nxt = None # Search mein pagination server handle karta hai
+            nxt = None
         else:
-            # Step 3: Normal Mode (Sirf 10 videos aur Next button)
+            # Home Page: 10 videos aur "Next" button ka logic
+            res = cloudinary.api.resources(resource_type="video", type="upload", max_results=11, next_cursor=cursor)
+            all_vids = res.get('resources', [])
             videos = all_vids[:10]
             nxt = res.get('next_cursor') if len(all_vids) > 10 else None
     except:
         videos, nxt = [], None
     return render_template_string(HOME_HTML, videos=videos, next_cursor=nxt, q=q)
 
-# --- LOGIN & UPLOAD ---
+# --- LOGIN, UPLOAD, RENAME, DELETE (Wahi Secure Code) ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         if request.form.get('pw') == ADMIN_PASSWORD:
             return render_template_string('''
                 <body style="text-align:center; padding:15px; font-family:sans-serif;">
-                    <h3>Upload Panel</h3>
+                    <h3>Upload</h3>
                     <form id="upForm">
                         <input type="file" id="fInp" required><br><br>
                         <input type="text" id="vInp" placeholder="Video Name" required style="width:85%; padding:10px;"><br><br>

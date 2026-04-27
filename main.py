@@ -1,6 +1,6 @@
 import os
 import requests
-from flask import Flask, request, render_template_string, redirect, url_for, Response
+from flask import Flask, request, render_template_string, redirect, url_for
 import cloudinary
 import cloudinary.api
 import cloudinary.uploader
@@ -17,32 +17,35 @@ cloudinary.config(
 
 ADMIN_PASSWORD = "809047"
 
-# --- INTERNAL PROXY LOGIC ---
+# --- INTERNAL PROXY LOGIC (English Force) ---
 @app.route('/fb-internal')
 def fb_internal():
-    # Ye hamara khud ka proxy engine hai
-    url = "https://mbasic.facebook.com/reels/"
+    # Humne yahan 'locale=en_US' jodh diya hai taaki English mein khule
+    url = "https://mbasic.facebook.com/reels/?locale=en_US"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 4.4.2; Jio Phone Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/30.0.0.0 Mobile Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Linux; Android 4.4.2; Jio Phone Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/30.0.0.0 Mobile Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9" # Server ko bata raha hai ki humein English chahiye
     }
     try:
         resp = requests.get(url, headers=headers)
-        # Content ko compress ya modify karne ki jagah yahan hai
+        # Links ko proxy se replace karna taaki agla page bhi English rahe
         content = resp.text.replace('href="https://mbasic.facebook.com', 'href="/fb-proxy-go?u=https://mbasic.facebook.com')
-        # Back to Home button add karna
-        content = f'<div style="background:#333;padding:10px;"><a href="/" style="color:white;text-decoration:none;font-weight:bold;">[ WAPAS JIO TUBE ]</a></div>' + content
+        # Back Button hamesha ki tarah top par
+        content = f'<div style="background:#333;padding:10px;text-align:center;"><a href="/" style="color:white;text-decoration:none;font-weight:bold;">[ WAPAS JIO TUBE ]</a></div>' + content
         return render_template_string(content)
     except:
-        return "Facebook Server Busy. Try Again!"
+        return "Facebook Load Nahi Ho Raha. Dobara Try Karein!"
 
 @app.route('/fb-proxy-go')
 def fb_proxy_go():
     target_url = request.args.get('u')
-    headers = {"User-Agent": "Mozilla/5.0 (Jio Phone)"}
+    if "locale=" not in target_url:
+        target_url += "&locale=en_US"
+    headers = {"User-Agent": "Mozilla/5.0 (Jio Phone)", "Accept-Language": "en-US,en;q=0.9"}
     resp = requests.get(target_url, headers=headers)
     return render_template_string(resp.text.replace('href="https://mbasic.facebook.com', 'href="/fb-proxy-go?u=https://mbasic.facebook.com'))
 
-# --- HOME PAGE UI (Saare Buttons Mehfooz Hain) ---
+# --- HOME PAGE UI (No Changes to Buttons) ---
 HOME_HTML = """
 <!DOCTYPE html>
 <html>
@@ -108,7 +111,7 @@ HOME_HTML = """
 </html>
 """
 
-# --- HOME, SEARCH, RENAME, DELETE, UPLOAD (No Changes) ---
+# --- REST OF THE CODE (No Changes) ---
 @app.route('/')
 def index():
     cursor = request.args.get('next_cursor'); q = request.args.get('q', '').strip().lower()

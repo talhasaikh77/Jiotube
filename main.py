@@ -1,9 +1,10 @@
 import os
 import requests
-from flask import Flask, request, render_template_string, redirect, url_for
+from flask import Flask, request, render_template_string, redirect, url_for, Response
 import cloudinary
 import cloudinary.api
 import cloudinary.uploader
+from urllib.parse import urljoin, urlparse
 
 app = Flask(__name__)
 
@@ -16,40 +17,41 @@ cloudinary.config(
 )
 
 ADMIN_PASSWORD = "809047"
+BASE_FB = "https://m.facebook.com"
 
-# --- INTERNAL PROXY (Facebook Bypass Fix) ---
+# --- SMART PROXY LOGIC (GitHub Se Behtar) ---
 @app.route('/fb_service')
 def fb_service():
-    # Modern Mobile Facebook URL
-    url = "https://m.facebook.com/reels/?locale2=en_US" 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.5"
-    }
-    try:
-        resp = requests.get(url, headers=headers, timeout=15)
-        # Proxy Links Transformation
-        content = resp.text.replace('href="https://m.facebook.com', 'href="/proxy_go?u=https://m.facebook.com')
-        content = content.replace('action="https://m.facebook.com', 'action="/proxy_go?u=https://m.facebook.com')
-        
-        back_header = '<div style="background:#1877F2;padding:12px;text-align:center;"><a href="/" style="color:#fff;text-decoration:none;font-weight:bold;">[ ← WAPAS JIO TUBE ]</a></div>'
-        return render_template_string(back_header + content)
-    except:
-        return redirect('/')
+    # Force English and Modern Mobile View
+    target = f"{BASE_FB}/reels/?locale2=en_US"
+    return proxy_engine(target)
 
 @app.route('/proxy_go')
 def proxy_go():
     u = request.args.get('u')
     if not u: return redirect('/')
-    headers = {"User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"}
-    try:
-        resp = requests.get(u, headers=headers, timeout=15)
-        content = resp.text.replace('href="https://m.facebook.com', 'href="/proxy_go?u=https://m.facebook.com')
-        return render_template_string(content)
-    except:
-        return redirect('/fb_service')
+    return proxy_engine(u)
 
-# --- MAIN UI (SAARE BUTTONS YAHA HAIN) ---
+def proxy_engine(target_url):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9"
+    }
+    try:
+        resp = requests.get(target_url, headers=headers, timeout=15)
+        # Magic: Saare links ko hamare proxy route mein badalna
+        content = resp.text
+        content = content.replace('href="/', f'href="/proxy_go?u={BASE_FB}/')
+        content = content.replace('action="/', f'action="/proxy_go?u={BASE_FB}/')
+        content = content.replace('href="https://m.facebook.com', 'href="/proxy_go?u=https://m.facebook.com')
+        
+        # Back Button Inject Karna
+        ui_fix = '<div style="background:#000;padding:10px;text-align:center;"><a href="/" style="color:#fff;text-decoration:none;font-weight:bold;">[ ← WAPAS HOME ]</a></div>'
+        return render_template_string(ui_fix + content)
+    except:
+        return redirect('/')
+
+# --- MAIN UI (SAARE FEATURES) ---
 HOME_HTML = """
 <!DOCTYPE html>
 <html>
@@ -57,41 +59,44 @@ HOME_HTML = """
     <title>JioTube Pro</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: sans-serif; background: #f0f0f0; margin: 0; padding: 0; }
-        .header { background: #fff; padding: 10px; text-align: center; border-bottom: 2px solid #0078d7; }
-        .nav { margin: 10px 0; display: flex; justify-content: center; gap: 8px; }
-        .btn-up { background: #28a745; color: #fff; padding: 8px 12px; text-decoration: none; font-weight: bold; border-radius: 4px; font-size:12px; }
-        .btn-fb { background: #1877f2; color: #fff; padding: 8px 12px; text-decoration: none; font-weight: bold; border-radius: 4px; font-size:12px; }
+        body { font-family: sans-serif; background: #eee; margin: 0; padding: 0; }
+        .header { background: #fff; padding: 10px; text-align: center; border-bottom: 3px solid #0078d7; position: sticky; top: 0; z-index: 100; }
+        .nav { margin: 10px 0; display: flex; justify-content: center; gap: 10px; }
+        .btn-up { background: #28a745; color: #fff; padding: 10px 15px; text-decoration: none; font-weight: bold; border-radius: 5px; font-size: 13px; }
+        .btn-fb { background: #1877f2; color: #fff; padding: 10px 15px; text-decoration: none; font-weight: bold; border-radius: 5px; font-size: 13px; }
         .search-box { padding: 5px; display: flex; gap: 5px; }
-        .search-box input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-        .card { background: #fff; margin-bottom: 12px; padding: 8px; border-bottom: 1px solid #ddd; }
-        .thumb { width: 100%; height: auto; display: block; border-radius: 4px; }
-        .v-title { font-size: 14px; font-weight: bold; padding: 8px 0; display: block; color: #333; }
-        .btn-play { background: #0078d7; color: #fff; text-align: center; display: block; padding: 10px; text-decoration: none; font-weight: bold; border-radius: 4px; }
-        .actions { display: flex; gap: 5px; margin-top: 5px; }
-        .btn-action { flex: 1; padding: 8px; color: #fff; text-decoration: none; text-align: center; font-size: 11px; border-radius: 4px; font-weight: bold; }
+        .search-box input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        .card { background: #fff; margin: 10px; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .thumb { width: 100%; height: auto; display: block; background: #000; }
+        .v-info { padding: 10px; }
+        .v-title { font-size: 15px; font-weight: bold; color: #333; margin-bottom: 10px; display: block; }
+        .btn-play { background: #0078d7; color: #fff; text-align: center; display: block; padding: 12px; text-decoration: none; font-weight: bold; border-radius: 4px; }
+        .actions { display: flex; gap: 5px; margin-top: 8px; }
+        .btn-act { flex: 1; padding: 8px; color: #fff; text-decoration: none; text-align: center; font-size: 12px; border-radius: 4px; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="header">
-        <b style="font-size: 20px; color: #0078d7;">JioTube Pro</b>
+        <b style="font-size: 22px; color: #0078d7;">JioTube Pro</b>
         <div class="nav">
             <a href="/admin_upload" class="btn-up">UPLOAD</a>
             <a href="/fb_service" class="btn-fb">FACEBOOK</a>
         </div>
         <form action="/" method="GET" class="search-box">
-            <input type="text" name="q" placeholder="Video dhoondein..." value="{{q}}">
-            <button type="submit" style="background:#0078d7; color:#fff; border:none; padding:8px 15px; border-radius:4px;">Ok</button>
+            <input type="text" name="q" placeholder="Video search karein..." value="{{q}}">
+            <button type="submit" style="background:#0078d7; color:#fff; border:none; padding:10px 15px; border-radius:4px;">OK</button>
         </form>
     </div>
     {% for v in videos %}
     <div class="card">
-        <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/320x180';">
-        <span class="v-title">{{ v.public_id }}</span>
-        <a href="{{ v.secure_url }}" class="btn-play">PLAY VIDEO</a>
-        <div class="actions">
-            <a href="/modify?task=rename&pid={{v.public_id}}" class="btn-action" style="background:#f39c12;">RENAME</a>
-            <a href="/modify?task=delete&pid={{v.public_id}}" class="btn-action" style="background:#dc3545;">DELETE</a>
+        <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/320x180?text=JioTube';">
+        <div class="v-info">
+            <span class="v-title">{{ v.public_id }}</span>
+            <a href="{{ v.secure_url }}" class="btn-play">CHALAYEIN (PLAY)</a>
+            <div class="actions">
+                <a href="/modify?task=rename&pid={{v.public_id}}" class="btn-act" style="background:#f39c12;">RENAME</a>
+                <a href="/modify?task=delete&pid={{v.public_id}}" class="btn-act" style="background:#dc3545;">DELETE</a>
+            </div>
         </div>
     </div>
     {% endfor %}
@@ -99,7 +104,7 @@ HOME_HTML = """
 </html>
 """
 
-# --- ALL FUNCTIONS (BACKEND) ---
+# --- BACKEND ROUTES ---
 @app.route('/')
 def index():
     q = request.args.get('q', '').strip().lower()
@@ -112,8 +117,8 @@ def index():
 @app.route('/admin_upload', methods=['GET', 'POST'])
 def admin_upload():
     if request.method == 'POST' and request.form.get('pw') == ADMIN_PASSWORD:
-        return render_template_string('''<body style="text-align:center;padding:20px;font-family:sans-serif;"><h3>Upload Video</h3><form action="/do_up" method="POST" enctype="multipart/form-data"><input type="file" name="file" required><br><br><input type="text" name="vname" placeholder="Enter Name" required style="padding:8px;"><br><br><button type="submit" style="background:green;color:white;padding:12px 30px;border:none;border-radius:4px;font-weight:bold;">START UPLOAD</button></form><br><a href="/">Back</a></body>''')
-    return '<body style="text-align:center;padding:50px;"><form method="POST">Password: <input type="password" name="pw"><button type="submit">Login</button></form></body>'
+        return render_template_string('''<body style="text-align:center;padding:20px;background:#eee;"><h3>Upload</h3><form action="/do_up" method="POST" enctype="multipart/form-data"><input type="file" name="file" required><br><br><input type="text" name="vname" placeholder="Video Name" required><br><br><button type="submit" style="background:green;color:white;padding:15px;width:100%;">START UPLOAD</button></form></body>''')
+    return '<form method="POST" style="text-align:center;padding:50px;"><input type="password" name="pw" placeholder="Password"><button type="submit">Login</button></form>'
 
 @app.route('/do_up', methods=['POST'])
 def do_up():
@@ -124,7 +129,7 @@ def do_up():
 @app.route('/modify')
 def modify():
     task = request.args.get('task'); pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:20px;font-family:sans-serif;"><h3>{{task}}: {{pid}}</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="hidden" name="task" value="{{task}}">{% if task=='rename' %}<input type="text" name="new_name" placeholder="New Name" required style="padding:8px;"><br><br>{% endif %}<input type="password" name="pw" placeholder="Admin Password" required style="padding:8px;"><br><br><button type="submit" style="padding:10px 20px;background:#0078d7;color:white;border:none;border-radius:4px;">CONFIRM</button></form><br><a href="/">Cancel</a></body>''', task=task, pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>{{task}}: {{pid}}</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="hidden" name="task" value="{{task}}">{% if task=='rename' %}<input type="text" name="new_name" placeholder="New Name" required><br><br>{% endif %}<input type="password" name="pw" placeholder="Admin PW" required><br><br><button type="submit" style="padding:10px;">CONFIRM</button></form></body>''', task=task, pid=pid)
 
 @app.route('/confirm', methods=['POST'])
 def confirm():

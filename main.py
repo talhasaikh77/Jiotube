@@ -7,7 +7,7 @@ import cloudinary.uploader
 
 app = Flask(__name__)
 
-# Cloudinary Config
+# --- Cloudinary Config (Check Karein Yeh Sahi Ho) ---
 cloudinary.config(
   cloud_name = "dawterffe",
   api_key = "258318685843824",
@@ -17,35 +17,37 @@ cloudinary.config(
 
 ADMIN_PASSWORD = "809047"
 
-# --- INTERNAL PROXY LOGIC (English Force) ---
-@app.route('/fb-internal')
+# --- INTERNAL PROXY LOGIC (Facebook Fix) ---
+@app.route('/facebook') # Route ka naam simple kar diya
 def fb_internal():
-    # Humne yahan 'locale=en_US' jodh diya hai taaki English mein khule
     url = "https://mbasic.facebook.com/reels/?locale=en_US"
     headers = {
         "User-Agent": "Mozilla/5.0 (Linux; Android 4.4.2; Jio Phone Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/30.0.0.0 Mobile Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9" # Server ko bata raha hai ki humein English chahiye
+        "Accept-Language": "en-US,en;q=0.9"
     }
     try:
         resp = requests.get(url, headers=headers)
-        # Links ko proxy se replace karna taaki agla page bhi English rahe
         content = resp.text.replace('href="https://mbasic.facebook.com', 'href="/fb-proxy-go?u=https://mbasic.facebook.com')
-        # Back Button hamesha ki tarah top par
-        content = f'<div style="background:#333;padding:10px;text-align:center;"><a href="/" style="color:white;text-decoration:none;font-weight:bold;">[ WAPAS JIO TUBE ]</a></div>' + content
-        return render_template_string(content)
+        # Simple Back button
+        back_btn = f'<div style="background:#333;padding:10px;text-align:center;"><a href="/" style="color:white;text-decoration:none;font-weight:bold;">[ BACK TO HOME ]</a></div>'
+        return render_template_string(back_btn + content)
     except:
-        return "Facebook Load Nahi Ho Raha. Dobara Try Karein!"
+        return "Facebook server busy. Please try again later."
 
 @app.route('/fb-proxy-go')
 def fb_proxy_go():
     target_url = request.args.get('u')
+    # Link missing hone par direct main page par bhej de
+    if not target_url:
+        return redirect(url_for('index'))
     if "locale=" not in target_url:
         target_url += "&locale=en_US"
     headers = {"User-Agent": "Mozilla/5.0 (Jio Phone)", "Accept-Language": "en-US,en;q=0.9"}
     resp = requests.get(target_url, headers=headers)
     return render_template_string(resp.text.replace('href="https://mbasic.facebook.com', 'href="/fb-proxy-go?u=https://mbasic.facebook.com'))
 
-# --- HOME PAGE UI (No Changes to Buttons) ---
+
+# --- HOME PAGE UI (Fixed Routes) ---
 HOME_HTML = """
 <!DOCTYPE html>
 <html>
@@ -78,8 +80,8 @@ HOME_HTML = """
     <div class="header">
         <b style="color:#0078d7; font-size: 20px;">JioTube Pro</b><br><br>
         <div class="nav-buttons">
-            <a href="/login" class="btn-green">Upload</a>
-            <a href="/fb-internal" class="btn-fb">Facebook</a>
+            <a href="/login-admin" class="btn-green">Upload</a>
+            <a href="/facebook" class="btn-fb">Facebook</a>
         </div>
         <form action="/" method="GET" class="search-box">
             <input type="text" name="q" placeholder="Video dhoondein..." value="{{ q }}">
@@ -94,8 +96,8 @@ HOME_HTML = """
             <span class="v-title">{{ v.public_id }}</span>
             <a href="{{ v.secure_url }}" class="btn btn-blue">PLAY VIDEO</a>
             <div class="btn-group">
-                <a href="/rename-page?pid={{ v.public_id }}" class="btn-sm btn-edit">Rename</a>
-                <a href="/delete-page?pid={{ v.public_id }}" class="btn-sm btn-del">Delete</a>
+                <a href="/video-action?task=rename&pid={{ v.public_id }}" class="btn-sm btn-edit">Rename</a>
+                <a href="/video-action?task=delete&pid={{ v.public_id }}" class="btn-sm btn-del">Delete</a>
             </div>
         </div>
     </div>
@@ -111,7 +113,7 @@ HOME_HTML = """
 </html>
 """
 
-# --- REST OF THE CODE (No Changes) ---
+# --- ADMIN ROUTES (Fixed to Prevent 404) ---
 @app.route('/')
 def index():
     cursor = request.args.get('next_cursor'); q = request.args.get('q', '').strip().lower()
@@ -127,38 +129,42 @@ def index():
     except: videos, nxt = [], None
     return render_template_string(HOME_HTML, videos=videos, next_cursor=nxt, q=q)
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/login-admin', methods=['GET', 'POST']) # Route ka naam unique kiya
 def login():
     if request.method == 'POST' and request.form.get('pw') == ADMIN_PASSWORD:
-        return render_template_string('''<body style="text-align:center; padding:15px;"><h3>Upload</h3><form id="upForm"><input type="file" id="fInp" required><br><br><input type="text" id="vInp" placeholder="Name" required><br><br><button type="button" onclick="upNow()" id="upBtn" style="background:green; color:white; padding:15px;">START</button></form><script>function upNow(){var f=document.getElementById('fInp').files[0]; var n=document.getElementById('vInp').value; var fd=new FormData(); fd.append("file",f); fd.append("vname",n); var x=new XMLHttpRequest(); x.onreadystatechange=function(){if(x.readyState==4)window.location.href="/";}; x.open("POST","/do-upload",true); x.send(fd);}</script></body>''')
-    return '<body style="text-align:center; padding:50px;"><form method="POST"><input type="password" name="pw"><button type="submit">Go</button></form></body>'
+        return render_template_string('''<body style="text-align:center; padding:15px; font-family:sans-serif;"><h3>Upload</h3><form id="upForm"><input type="file" id="fInp" required><br><br><input type="text" id="vInp" placeholder="Video Name" required><br><br><button type="button" onclick="upNow()" id="upBtn" style="background:#28a745; color:white; padding:10px 20px; font-weight:bold; border:none; border-radius:4px;">START UPLOAD</button></form><p id="v-status"></p><script>function upNow(){document.getElementById('upBtn').innerHTML='Uploading...'; var f=document.getElementById('fInp').files[0]; var n=document.getElementById('vInp').value; var fd=new FormData(); fd.append("file",f); fd.append("vname",n); var x=new XMLHttpRequest(); x.onreadystatechange=function(){if(x.readyState==4){if(x.status==200){window.location.href="/";}else{document.getElementById('v-status').innerHTML='Error uploading.';document.getElementById('upBtn').innerHTML='START UPLOAD';}}}; x.open("POST","/upload-api",true); x.send(fd);}</script></body>''')
+    return '<body style="text-align:center; padding:50px; font-family:sans-serif;"><form method="POST"><input type="password" name="pw" placeholder="Admin PW" style="padding:10px; border-radius:4px;"><br><br><button type="submit" style="padding:10px 20px;">Submit</button></form></body>'
 
-@app.route('/do-upload', methods=['POST'])
+@app.route('/upload-api', methods=['POST'])
 def do_upload():
     file = request.files.get('file'); vname = request.form.get('vname').replace(' ','_')
     if file: cloudinary.uploader.upload(file, resource_type="video", public_id=vname)
     return "OK"
 
-@app.route('/rename-page')
-def rename_page():
+# Combine Rename & Delete Route logic to reduce route number
+@app.route('/video-action')
+def video_action():
+    task = request.args.get('task')
     pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:20px;"><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" required><br><br><input type="password" name="pw" required><br><br><button type="submit">Update</button></form></body>''', pid=pid)
-
-@app.route('/confirm-rename', methods=['POST'])
-def confirm_rename():
-    if request.form.get('pw') == ADMIN_PASSWORD:
-        cloudinary.uploader.rename(request.form.get('old_pid'), request.form.get('new_pid').replace(' ','_'), resource_type="video")
+    
+    if task == 'rename':
+        return render_template_string('''<body style="text-align:center;padding:20px;font-family:sans-serif;"><h3>Rename: {{pid}}</h3><form action="/confirm-action" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="hidden" name="task" value="rename"><input type="text" name="new_pid" placeholder="New Name" required style="padding:10px; border-radius:4px;"><br><br><input type="password" name="pw" placeholder="Admin PW" required style="padding:10px; border-radius:4px;"><br><br><button type="submit" style="background:#f39c12; color:white; padding:10px 20px; font-weight:bold; border:none; border-radius:4px;">Update</button><br><br><a href="/">Cancel</a></form></body>''', pid=pid)
+    elif task == 'delete':
+        return render_template_string('''<body style="text-align:center;padding:20px;font-family:sans-serif;"><h3 style="color:red;">Delete: {{pid}}</h3><p>Sure delete video?</p><form action="/confirm-action" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="hidden" name="task" value="delete"><input type="password" name="pw" placeholder="Admin PW" required style="padding:10px; border-radius:4px;"><br><br><button type="submit" style="background:red; color:white; padding:10px 20px; font-weight:bold; border:none; border-radius:4px;">Yes, Delete</button><br><br><a href="/">Cancel</a></form></body>''', pid=pid)
     return redirect(url_for('index'))
 
-@app.route('/delete-page')
-def delete_page():
-    pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:20px;"><p>{{pid}}</p><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" required><br><br><button type="submit" style="background:red; color:white;">Delete</button></form></body>''', pid=pid)
-
-@app.route('/confirm-del', methods=['POST'])
-def confirm_del():
-    if request.form.get('pw') == ADMIN_PASSWORD:
+@app.route('/confirm-action', methods=['POST'])
+def confirm_action():
+    if request.form.get('pw') != ADMIN_PASSWORD:
+        return redirect(url_for('index'))
+        
+    task = request.form.get('task')
+    
+    if task == 'rename':
+        cloudinary.uploader.rename(request.form.get('old_pid'), request.form.get('new_pid').replace(' ','_'), resource_type="video")
+    elif task == 'delete':
         cloudinary.uploader.destroy(request.form.get('pid'), resource_type="video")
+    
     return redirect(url_for('index'))
 
 if __name__ == '__main__':

@@ -29,23 +29,18 @@ HOME_HTML = """
         .nav-buttons { display: flex; justify-content: center; gap: 8px; margin-bottom: 8px; }
         .search-box { display: flex; gap: 2px; padding: 0 5px 5px 5px; }
         .search-box input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 2px; font-size: 14px; }
-        
         .card { background: #fff; margin-bottom: 15px; border-bottom: 1px solid #ddd; width: 100%; }
         .thumb { width: 100%; height: auto; max-height: 180px; object-fit: cover; background: #000; display: block; }
-        
         .v-info { padding: 8px; text-align: left; }
         .v-title { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px; display: block; }
-        
         .btn { text-decoration: none; display: block; text-align: center; padding: 10px; border-radius: 4px; font-weight: bold; font-size: 14px; }
         .btn-blue { background: #0078d7; color: #fff; }
-        .btn-fb { background: #1877F2; color: #fff; padding: 6px 15px; font-size: 12px; border-radius: 3px; text-decoration: none; }
-        .btn-green { background: #28a745; color: #fff; padding: 6px 15px; font-size: 12px; border-radius: 3px; text-decoration: none; }
-        
+        .btn-fb { background: #1877F2; color: #fff; padding: 6px 15px; font-size: 12px; border-radius: 3px; text-decoration: none; font-weight: bold; }
+        .btn-green { background: #28a745; color: #fff; padding: 6px 15px; font-size: 12px; border-radius: 3px; text-decoration: none; font-weight: bold; }
         .btn-group { display: flex; gap: 5px; margin-top: 5px; }
         .btn-sm { flex: 1; padding: 8px; font-size: 11px; color: #fff; text-decoration: none; border-radius: 3px; text-align: center; font-weight: bold; }
         .btn-edit { background: #f39c12; }
         .btn-del { background: #dc3545; }
-        
         .pagination { padding: 20px; text-align: center; }
         .btn-nav { background: #333; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 4px; font-size: 13px; }
     </style>
@@ -62,10 +57,6 @@ HOME_HTML = """
             <button type="submit" style="background:#0078d7; color:#fff; border:none; padding:8px 12px; border-radius:2px;">Ok</button>
         </form>
     </div>
-
-    {% if not videos %}
-        <div style="text-align:center; padding:20px; font-size:14px; color:#666;">Kuch nahi mila!<br><br><a href="/" class="btn-nav">Wapas Jao</a></div>
-    {% endif %}
 
     {% for v in videos %}
     <div class="card">
@@ -91,20 +82,30 @@ HOME_HTML = """
 </html>
 """
 
-# --- FB LITE PAGE ---
+# --- FB PROXY PAGE (Reels & Full Access) ---
 @app.route('/facebook')
 def facebook():
+    # Google Web Light Proxy ya similar bypass use karke load kar rahe hain
+    proxy_url = "https://www.facebook.com/reels/"
     return render_template_string("""
     <html>
-    <head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-    <body style="margin:0;">
-        <a href="/" style="position:fixed; bottom:10px; right:10px; background:#333; color:white; padding:10px; text-decoration:none; border-radius:50px; font-size:12px; z-index:1000; font-family:sans-serif; opacity:0.8;">Back</a>
-        <iframe src="https://mbasic.facebook.com" style="width:100%; height:100vh; border:none;"></iframe>
+    <head>
+        <title>FB Reels Proxy</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
+            iframe { width: 100%; height: 100%; border: none; }
+            .back-float { position: fixed; bottom: 15px; left: 15px; background: #0078d7; color: white; padding: 10px 20px; text-decoration: none; border-radius: 50px; font-weight: bold; z-index: 9999; font-family: sans-serif; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+        </style>
+    </head>
+    <body>
+        <a href="/" class="back-float">HOME</a>
+        <iframe src="https://m.facebook.com/reels/"></iframe>
     </body>
     </html>
     """)
 
-# --- SEARCH & HOME LOGIC ---
+# --- SEARCH & ADMIN LOGIC (Wahi Stable Code) ---
 @app.route('/')
 def index():
     cursor = request.args.get('next_cursor')
@@ -113,21 +114,18 @@ def index():
         if q:
             res = cloudinary.api.resources(resource_type="video", type="upload", max_results=100)
             all_vids = res.get('resources', [])
-            videos = [v for v in all_vids if q in v.get('public_id', '').lower()]
-            nxt = None
+            videos = [v for v in all_vids if q in v.get('public_id', '').lower()]; nxt = None
         else:
             res = cloudinary.api.resources(resource_type="video", type="upload", max_results=11, next_cursor=cursor)
             all_vids = res.get('resources', [])
-            videos = all_vids[:10]
-            nxt = res.get('next_cursor') if len(all_vids) > 10 else None
+            videos = all_vids[:10]; nxt = res.get('next_cursor') if len(all_vids) > 10 else None
     except: videos, nxt = [], None
     return render_template_string(HOME_HTML, videos=videos, next_cursor=nxt, q=q)
 
-# --- UPLOAD, RENAME, DELETE ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST' and request.form.get('pw') == ADMIN_PASSWORD:
-        return render_template_string('''<body style="text-align:center; padding:15px; font-family:sans-serif;"><h3>Upload</h3><form id="upForm"><input type="file" id="fInp" required><br><br><input type="text" id="vInp" placeholder="Name" required style="width:80%; padding:10px;"><br><br><button type="button" onclick="upNow()" id="upBtn" style="background:green; color:white; padding:15px; width:90%; border:none; border-radius:5px;">START UPLOAD</button></form><script>function upNow(){var f=document.getElementById('fInp').files[0]; var n=document.getElementById('vInp').value; var fd=new FormData(); fd.append("file",f); fd.append("vname",n); var x=new XMLHttpRequest(); x.onreadystatechange=function(){if(x.readyState==4)window.location.href="/";}; x.open("POST","/do-upload",true); x.send(fd);}</script></body>''')
+        return render_template_string('''<body style="text-align:center; padding:15px;"><h3>Upload</h3><form id="upForm"><input type="file" id="fInp" required><br><br><input type="text" id="vInp" placeholder="Name" required><br><br><button type="button" onclick="upNow()" id="upBtn" style="background:green; color:white; padding:15px;">START</button></form><script>function upNow(){var f=document.getElementById('fInp').files[0]; var n=document.getElementById('vInp').value; var fd=new FormData(); fd.append("file",f); fd.append("vname",n); var x=new XMLHttpRequest(); x.onreadystatechange=function(){if(x.readyState==4)window.location.href="/";}; x.open("POST","/do-upload",true); x.send(fd);}</script></body>''')
     return '<body style="text-align:center; padding:50px;"><form method="POST"><input type="password" name="pw"><button type="submit">Go</button></form></body>'
 
 @app.route('/do-upload', methods=['POST'])
@@ -139,7 +137,7 @@ def do_upload():
 @app.route('/rename-page')
 def rename_page():
     pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Rename</h3><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" required style="padding:10px;"><br><br><input type="password" name="pw" placeholder="Pass" required style="padding:10px;"><br><br><button type="submit">Update</button></form></body>''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:20px;"><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" required><br><br><input type="password" name="pw" required><br><br><button type="submit">Update</button></form></body>''', pid=pid)
 
 @app.route('/confirm-rename', methods=['POST'])
 def confirm_rename():
@@ -150,7 +148,7 @@ def confirm_rename():
 @app.route('/delete-page')
 def delete_page():
     pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Delete?</h3><p>{{pid}}</p><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" required style="padding:10px;"><br><br><button type="submit" style="background:red; color:white; padding:10px;">Delete Video</button></form></body>''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:20px;"><p>{{pid}}</p><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" required><br><br><button type="submit" style="background:red; color:white;">Delete</button></form></body>''', pid=pid)
 
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():

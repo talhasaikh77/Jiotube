@@ -3,3 +3,4 @@ cloudinary
 requests
 gunicorn
 beautifulsoup4
+beautifulsoup4

@@ -12,31 +12,45 @@ app = Flask(__name__)
 cloudinary.config(cloud_name="dawterffe", api_key="258318685843824", api_secret="NxTNXBeLmupMQ0S1FOPU9t6bcjo", secure=True)
 ADMIN_PASSWORD = "809047"
 
-# --- GITHUB PROXY LOGIC ---
-def github_proxy_engine(content, target_url):
+# --- STRICT PROXY ENGINE (No Direct Leaks) ---
+def strict_proxy_logic(content, target_url):
     parsed = urlparse(target_url)
-    base = f"{parsed.scheme}://{parsed.netloc}"
-    content = content.replace('href="/', f'href="/proxy_go?u={base}/')
-    content = content.replace('src="/', f'src="/proxy_go?u={base}/')
-    content = content.replace('action="/', f'action="/proxy_go?u={base}/')
-    content = content.replace('href="https://', '/proxy_go?u=https://')
-    nav = f'<div style="background:#000;padding:15px;text-align:center;border-bottom:2px solid red;"><a href="/proxy_page" style="color:#fff;text-decoration:none;font-weight:bold;">[ EXIT PROXY ]</a></div>'
+    base_domain = f"{parsed.scheme}://{parsed.netloc}"
+    
+    # 1. Sabse pehle relative links (/path) ko absolute banao
+    # 2. Phir saare 'http' wale links ko hamare proxy route par mod do
+    
+    # Ye logic har link ko hamare /proxy_go?u=... ke piche chipka dega
+    content = content.replace('href="/', f'href="/proxy_go?u={base_domain}/')
+    content = content.replace('src="/', f'src="/proxy_go?u={base_domain}/')
+    content = content.replace('action="/', f'action="/proxy_go?u={base_domain}/')
+    
+    # Hard-fix for full links (https://...)
+    content = content.replace('href="https://', 'href="/proxy_go?u=https://')
+    content = content.replace('href="http://', 'href="/proxy_go?u=http://')
+
+    nav = f'''<div style="background:#000;padding:12px;text-align:center;border-bottom:3px solid red;position:sticky;top:0;">
+                <a href="/proxy_page" style="color:#fff;text-decoration:none;font-weight:bold;">[ EXIT PROXY ]</a>
+                <span style="color:yellow;margin-left:10px;font-size:10px;">Safe Mode On</span>
+              </div>'''
     return nav + content
 
 @app.route('/proxy_page')
 def proxy_page():
     return '''
-    <body style="background:#000;color:#fff;text-align:center;font-family:sans-serif;padding:30px;">
-        <h1 style="color:red;">GitHub Proxy Pro</h1>
-        <form action="/proxy_go" method="GET">
-            <input type="text" name="u" placeholder="https://mbasic.facebook.com" style="width:85%;padding:15px;border-radius:10px;"><br><br>
-            <button style="width:90%;padding:15px;background:red;color:#fff;border:none;border-radius:10px;font-weight:bold;">OPEN</button>
-        </form>
-        <div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <a href="/proxy_go?u=https://mbasic.facebook.com" style="background:#222;padding:15px;color:#fff;text-decoration:none;border-radius:10px;">Facebook</a>
-            <a href="/proxy_go?u=https://www.google.com" style="background:#222;padding:15px;color:#fff;text-decoration:none;border-radius:10px;">Google</a>
+    <body style="background:#111;color:#fff;text-align:center;font-family:sans-serif;padding:30px;">
+        <h2 style="color:red;">Strict GitHub Proxy</h2>
+        <div style="background:#222;padding:20px;border-radius:15px;border:1px solid #333;">
+            <form action="/proxy_go" method="GET">
+                <input type="text" name="u" placeholder="https://mbasic.facebook.com" style="width:85%;padding:15px;border-radius:8px;border:none;margin-bottom:15px;"><br>
+                <button style="width:90%;padding:15px;background:red;color:#fff;border:none;border-radius:10px;font-weight:bold;">GO SECURE</button>
+            </form>
         </div>
-        <br><a href="/" style="color:#555;">← JioTube Home</a>
+        <div style="margin-top:25px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <a href="/proxy_go?u=https://mbasic.facebook.com" style="background:#1877f2;padding:15px;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;">Facebook</a>
+            <a href="/proxy_go?u=https://www.google.com" style="background:#ea4335;padding:15px;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;">Google</a>
+        </div>
+        <br><a href="/" style="color:#555;text-decoration:none;">← JioTube Home</a>
     </body>
     '''
 
@@ -45,16 +59,22 @@ def proxy_go():
     u = request.args.get('u')
     if not u: return redirect('/proxy_page')
     if not u.startswith('http'): u = 'https://' + u
+    
     headers = {"User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"}
+    
     try:
-        r = requests.get(u, headers=headers, timeout=15, allow_redirects=True)
-        if "text/html" in r.headers.get("Content-Type", ""):
-            fixed = github_proxy_engine(r.text, u)
+        r = requests.get(u, headers=headers, timeout=20, allow_redirects=True)
+        # Content-Type check
+        ctype = r.headers.get("Content-Type", "")
+        if "text/html" in ctype:
+            fixed = strict_proxy_logic(r.text, u)
             return Response(fixed, mimetype="text/html")
-        return Response(r.content, mimetype=r.headers.get("Content-Type"))
-    except: return redirect('/proxy_page')
+        else:
+            return Response(r.content, mimetype=ctype)
+    except:
+        return redirect('/proxy_page')
 
-# --- JIOTUBE HOME (Buttons Added) ---
+# --- JIOTUBE HOME (With Buttons) ---
 @app.route('/')
 def index():
     q = request.args.get('q', '').strip().lower()
@@ -63,9 +83,7 @@ def index():
         videos = [v for v in res.get('resources', []) if q in v.get('public_id', '').lower()]
     except: videos = []
     
-    v_cards = ""
-    for v in videos:
-        v_cards += f'''
+    v_cards = "".join([f'''
         <div style="background:#fff;margin-bottom:20px;border-radius:10px;overflow:hidden;box-shadow:0 2px 5px rgba(0,0,0,0.1);">
             <img src="{v['secure_url'].rsplit('.', 1)[0] + '.jpg'}" style="width:100%;">
             <div style="padding:15px;">
@@ -77,26 +95,22 @@ def index():
                 </div>
             </div>
         </div>
-        '''
+    ''' for v in videos])
 
     return f'''
-    <body style="background:#f4f4f4;margin:0;font-family:sans-serif;">
-        <div style="background:#fff;padding:15px;text-align:center;border-bottom:3px solid #0078d7;position:sticky;top:0;z-index:10;">
+    <body style="background:#f4f4f4;margin:0;font-family:sans-serif;padding-bottom:30px;">
+        <div style="background:#fff;padding:15px;text-align:center;border-bottom:3px solid #0078d7;position:sticky;top:0;z-index:100;">
             <h2 style="margin:0;color:#0078d7;">JioTube Pro</h2>
             <div style="margin-top:10px;display:flex;gap:5px;">
-                <a href="/admin_upload" style="flex:1;background:#28a745;color:#fff;padding:10px;text-decoration:none;border-radius:5px;font-size:13px;">UPLOAD</a>
-                <a href="/proxy_page" style="flex:1;background:red;color:#fff;padding:10px;text-decoration:none;border-radius:5px;font-size:13px;">PROXY</a>
+                <a href="/admin_upload" style="flex:1;background:#28a745;color:#fff;padding:10px;text-decoration:none;border-radius:5px;">UPLOAD</a>
+                <a href="/proxy_page" style="flex:1;background:red;color:#fff;padding:10px;text-decoration:none;border-radius:5px;">PROXY</a>
             </div>
-            <form action="/" method="GET" style="margin-top:10px;display:flex;gap:5px;">
-                <input type="text" name="q" placeholder="Video Search..." style="flex:1;padding:8px;" value="{q}">
-                <button type="submit" style="background:#0078d7;color:#fff;border:none;padding:8px 15px;">OK</button>
-            </form>
         </div>
         <div style="padding:10px;">{v_cards}</div>
     </body>
     '''
 
-# --- Admin & Modify Routes ---
+# Admin and Modify Routes (Same as before)
 @app.route('/admin_upload', methods=['GET', 'POST'])
 def admin_upload():
     if request.method == 'POST' and request.form.get('pw') == ADMIN_PASSWORD:
@@ -114,7 +128,7 @@ def modify():
     task = request.args.get('task'); pid = request.args.get('pid')
     return render_template_string('''
         <form action="/confirm" method="POST" style="padding:20px;text-align:center;">
-            <h3>{{task.upper()}} : {{pid}}</h3>
+            <h3>{{task.upper()}}</h3>
             <input type="hidden" name="pid" value="{{pid}}">
             <input type="hidden" name="task" value="{{task}}">
             {% if task=="rename" %}<input type="text" name="new_name" placeholder="New Name"><br><br>{% endif %}

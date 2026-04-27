@@ -12,86 +12,56 @@ app = Flask(__name__)
 cloudinary.config(cloud_name="dawterffe", api_key="258318685843824", api_secret="NxTNXBeLmupMQ0S1FOPU9t6bcjo", secure=True)
 ADMIN_PASSWORD = "809047"
 
-# --- MINIPROXY PYTHON LOGIC (Fixed for Images & FB) ---
-def miniproxy_fix(html, current_url):
+# --- SMART LINK FIXER ---
+def miniproxy_logic(html, current_url):
     base_parsed = urlparse(current_url)
     base_url = f"{base_parsed.scheme}://{base_parsed.netloc}"
     
-    # Har link, image aur form ko hamare proxy se guzaarna
-    # MiniProxy ka asli jadoo yahi hai
-    tags = {
-        'href="': 'href="/proxy_go?u=',
-        'src="': 'src="/proxy_go?u=',
-        'action="': 'action="/proxy_go?u=',
-        'url("': 'url("/proxy_go?u='
-    }
+    # Absolute URL Injection
+    html = html.replace('href="/', f'href="/proxy_go?u={base_url}/')
+    html = html.replace('src="/', f'src="/proxy_go?u={base_url}/')
+    html = html.replace('action="/', f'action="/proxy_go?u={base_url}/')
     
-    for tag, replacement in tags.items():
-        # Relative links ko absolute banana phir replace karna
-        html = html.replace(tag + '/', replacement + base_url + '/')
-        html = html.replace(tag + 'http', replacement + 'http')
-        
-    return html
+    # Navigation Bar (Simple HTML taaki Flask error na de)
+    nav = f'<div style="background:#000;padding:12px;text-align:center;"><a href="/proxy_page" style="color:#fff;text-decoration:none;font-weight:bold;">[ ← EXIT PROXY ]</a></div>'
+    return nav + html
 
 @app.route('/proxy_page')
 def proxy_page():
+    # Home screen for Proxy
     return render_template_string("""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>MiniProxy Pro</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            body { font-family: sans-serif; background: #0f0f0f; color: #fff; text-align: center; padding: 15px; }
-            .search-box { background: #1a1a1a; padding: 20px; border-radius: 15px; border: 1px solid #333; }
-            input { width: 90%; padding: 15px; border-radius: 8px; border: none; background:#000; color:#0f0; margin-bottom: 10px; font-size:16px; }
-            button { background: #ff4757; color: #fff; padding: 12px; border: none; border-radius: 8px; font-weight: bold; width: 95%; }
-            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
-            .tile { background: #2f3542; padding: 20px; color: #fff; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 14px; }
-        </style>
-    </head>
-    <body>
-        <h2 style="color:#ff4757;">MINIPROXY ENGINE</h2>
-        <div class="search-box">
-            <form action="/proxy_go" method="GET">
-                <input type="text" name="u" placeholder="Enter URL (e.g. google.com)" required><br>
-                <button type="submit">UNLOCK SITE</button>
-            </form>
+    <body style="background:#1a1a1a;color:#fff;text-align:center;font-family:sans-serif;padding:20px;">
+        <h2>Proxy Engine</h2>
+        <form action="/proxy_go" method="GET">
+            <input type="text" name="u" placeholder="https://google.com" style="width:80%;padding:10px;border-radius:5px;"><br><br>
+            <button style="padding:10px 20px;background:#e74c3c;color:#fff;border:none;border-radius:5px;">OPEN SITE</button>
+        </form>
+        <div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <a href="/proxy_go?u=https://mbasic.facebook.com" style="padding:15px;background:#333;color:#fff;text-decoration:none;border-radius:5px;">Facebook</a>
+            <a href="/proxy_go?u=https://www.google.com" style="padding:15px;background:#333;color:#fff;text-decoration:none;border-radius:5px;">Google</a>
         </div>
-        <div class="grid">
-            <a href="/proxy_go?u=https://mbasic.facebook.com" class="tile" style="border-top: 4px solid #1e90ff;">FACEBOOK</a>
-            <a href="/proxy_go?u=https://www.google.com" class="tile" style="border-top: 4px solid #2ed573;">GOOGLE</a>
-            <a href="/proxy_go?u=https://m.youtube.com" class="tile" style="border-top: 4px solid #ff4757;">YOUTUBE</a>
-            <a href="/proxy_go?u=https://www.wikipedia.org" class="tile" style="border-top: 4px solid #ffa502;">WIKI</a>
-        </div>
-        <br><a href="/" style="color:#57606f; text-decoration:none;">← EXIT TO JIOTUBE</a>
+        <br><a href="/" style="color:#aaa;">Back to JioTube</a>
     </body>
-    </html>
     """)
 
 @app.route('/proxy_go')
 def proxy_go():
-    target = request.args.get('u')
-    if not target: return redirect('/proxy_page')
-    if not target.startswith('http'): target = 'https://' + target
+    u = request.args.get('u')
+    if not u: return redirect('/proxy_page')
+    if not u.startswith('http'): u = 'https://' + u
     
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
-        "Accept-Encoding": "identity" # Taaki compression error na aaye
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"}
     
     try:
-        r = requests.get(target, headers=headers, timeout=20, allow_redirects=True)
-        # Content-Type check karna (Image hai ya HTML)
+        r = requests.get(u, headers=headers, timeout=15)
         if 'text/html' in r.headers.get('Content-Type', ''):
-            processed_html = miniproxy_fix(r.text, target)
-            nav = f'<div style="background:#000;padding:10px;text-align:center;"><a href="/proxy_page" style="color:#fff;text-decoration:none;font-weight:bold;">[ ← BACK TO PROXY ]</a></div>'
-            return render_template_string(nav + processed_html)
+            # Yahan hum render_template_string use NAHI kar rahe (Error Fix)
+            fixed_content = miniproxy_logic(r.text, u)
+            return Response(fixed_content, mimetype='text/html')
         else:
-            # Agar image ya CSS hai toh direct bhej dena
-            return Response(r.content, content_type=r.headers.get('Content-Type'))
-    except Exception as e:
-        return f"MiniProxy Error: {str(e)}"
+            return Response(r.content, mimetype=r.headers.get('Content-Type'))
+    except:
+        return redirect('/proxy_page')
 
 # --- JIOTUBE HOME ---
 @app.route('/')
@@ -102,53 +72,22 @@ def index():
         videos = [v for v in res.get('resources', []) if q in v.get('public_id', '').lower()]
     except: videos = []
     
-    HOME_HTML = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>JioTube Pro</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            body { font-family: sans-serif; background: #eee; margin: 0; }
-            .header { background: #fff; padding: 15px; text-align: center; border-bottom: 4px solid #0078d7; position:sticky; top:0; z-index:100; }
-            .nav { display: flex; gap: 8px; margin-top: 10px; }
-            .btn { flex: 1; padding: 12px; color: #fff; text-decoration: none; border-radius: 8px; font-weight: bold; text-align: center; }
-            .v-card { background: #fff; margin: 15px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-            .v-card img { width: 100%; display: block; }
-            .play { display: block; background: #0078d7; color: #fff; text-align: center; padding: 15px; text-decoration: none; font-weight: bold; }
-        </style>
-    </head>
-    <body>
-        <div class="header">
-            <b style="font-size: 24px; color: #0078d7;">JioTube Pro</b>
-            <div class="nav">
-                <a href="/admin_upload" class="btn" style="background:#2ed573;">UPLOAD</a>
-                <a href="/proxy_page" class="btn" style="background:#ff4757;">PROXY</a>
-            </div>
-            <form action="/" method="GET" style="display:flex;gap:5px;margin-top:10px;">
-                <input type="text" name="q" placeholder="Search Videos..." style="flex:1;padding:10px;border:1px solid #ddd;border-radius:8px;">
-                <button type="submit" style="background:#0078d7;color:#fff;border:none;padding:10px;border-radius:8px;">OK</button>
-            </form>
+    html = f"""
+    <body style="font-family:sans-serif;background:#eee;margin:0;padding:10px;">
+        <div style="text-align:center;background:#fff;padding:15px;border-bottom:3px solid #0078d7;">
+            <b style="font-size:22px;color:#0078d7;">JioTube Pro</b><br><br>
+            <a href="/admin_upload" style="padding:10px;background:green;color:#fff;text-decoration:none;border-radius:5px;">UPLOAD</a>
+            <a href="/proxy_page" style="padding:10px;background:red;color:#fff;text-decoration:none;border-radius:5px;">PROXY</a>
         </div>
-        {% for v in videos %}
-        <div class="v-card">
-            <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}">
-            <div style="padding:15px;">
-                <b style="display:block;margin-bottom:10px;">{{ v.public_id }}</b>
-                <a href="{{ v.secure_url }}" class="play">WATCH NOW</a>
-            </div>
-        </div>
-        {% endfor %}
+        {"".join([f'<div style="background:#fff;margin-top:10px;border-radius:8px;overflow:hidden;"><img src="{v["secure_url"].rsplit(".", 1)[0] + ".jpg"}" style="width:100%;"><div style="padding:10px;"><b>{v["public_id"]}</b><br><br><a href="{v["secure_url"]}" style="display:block;background:#0078d7;color:#fff;text-align:center;padding:12px;text-decoration:none;font-weight:bold;">PLAY</a></div></div>' for v in videos])}
     </body>
-    </html>
     """
-    return render_template_string(HOME_HTML, videos=videos, q=q)
+    return html
 
-# Admin Upload (Baki sab same)
 @app.route('/admin_upload', methods=['GET', 'POST'])
 def admin_upload():
     if request.method == 'POST' and request.form.get('pw') == ADMIN_PASSWORD:
-        return render_template_string('<form action="/do_up" method="POST" enctype="multipart/form-data"><input type="file" name="file"><input type="text" name="vname"><button>Upload</button></form>')
+        return '<form action="/do_up" method="POST" enctype="multipart/form-data"><input type="file" name="file"><input type="text" name="vname"><button>Up</button></form>'
     return '<form method="POST"><input type="password" name="pw"><button>Login</button></form>'
 
 @app.route('/do_up', methods=['POST'])

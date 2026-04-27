@@ -1,5 +1,6 @@
 import os
-from flask import Flask, request, render_template_string, redirect, url_for
+import requests
+from flask import Flask, request, render_template_string, redirect, url_for, Response
 import cloudinary
 import cloudinary.api
 import cloudinary.uploader
@@ -16,7 +17,32 @@ cloudinary.config(
 
 ADMIN_PASSWORD = "809047"
 
-# --- HOME PAGE UI ---
+# --- INTERNAL PROXY LOGIC ---
+@app.route('/fb-internal')
+def fb_internal():
+    # Ye hamara khud ka proxy engine hai
+    url = "https://mbasic.facebook.com/reels/"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 4.4.2; Jio Phone Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/30.0.0.0 Mobile Safari/537.36"
+    }
+    try:
+        resp = requests.get(url, headers=headers)
+        # Content ko compress ya modify karne ki jagah yahan hai
+        content = resp.text.replace('href="https://mbasic.facebook.com', 'href="/fb-proxy-go?u=https://mbasic.facebook.com')
+        # Back to Home button add karna
+        content = f'<div style="background:#333;padding:10px;"><a href="/" style="color:white;text-decoration:none;font-weight:bold;">[ WAPAS JIO TUBE ]</a></div>' + content
+        return render_template_string(content)
+    except:
+        return "Facebook Server Busy. Try Again!"
+
+@app.route('/fb-proxy-go')
+def fb_proxy_go():
+    target_url = request.args.get('u')
+    headers = {"User-Agent": "Mozilla/5.0 (Jio Phone)"}
+    resp = requests.get(target_url, headers=headers)
+    return render_template_string(resp.text.replace('href="https://mbasic.facebook.com', 'href="/fb-proxy-go?u=https://mbasic.facebook.com'))
+
+# --- HOME PAGE UI (Saare Buttons Mehfooz Hain) ---
 HOME_HTML = """
 <!DOCTYPE html>
 <html>
@@ -50,10 +76,10 @@ HOME_HTML = """
         <b style="color:#0078d7; font-size: 20px;">JioTube Pro</b><br><br>
         <div class="nav-buttons">
             <a href="/login" class="btn-green">Upload</a>
-            <a href="https://www.croxyproxy.com/_en/proxify?url=https%3A%2F%2Fm.facebook.com%2F" target="_blank" class="btn-fb">Facebook</a>
+            <a href="/fb-internal" class="btn-fb">Facebook</a>
         </div>
         <form action="/" method="GET" class="search-box">
-            <input type="text" name="q" placeholder="Dhoondein..." value="{{ q }}">
+            <input type="text" name="q" placeholder="Video dhoondein..." value="{{ q }}">
             <button type="submit" style="background:#0078d7; color:#fff; border:none; padding:8px 12px; border-radius:2px;">Ok</button>
         </form>
     </div>
@@ -82,7 +108,7 @@ HOME_HTML = """
 </html>
 """
 
-# --- ADMIN LOGIC ---
+# --- HOME, SEARCH, RENAME, DELETE, UPLOAD (No Changes) ---
 @app.route('/')
 def index():
     cursor = request.args.get('next_cursor'); q = request.args.get('q', '').strip().lower()

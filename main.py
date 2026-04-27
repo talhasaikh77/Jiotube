@@ -26,23 +26,28 @@ HOME_HTML = """
     <style>
         body { font-family: sans-serif; background: #eee; margin: 0; padding: 0; width: 100%; overflow-x: hidden; }
         .header { background: #fff; padding: 10px 5px; text-align: center; border-bottom: 2px solid #0078d7; margin-bottom: 5px; }
-        .nav-buttons { display: flex; justify-content: center; gap: 5px; margin-bottom: 8px; }
+        .nav-buttons { display: flex; justify-content: center; gap: 8px; margin-bottom: 8px; }
         .search-box { display: flex; gap: 2px; padding: 0 5px 5px 5px; }
         .search-box input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 2px; font-size: 14px; }
+        
         .card { background: #fff; margin-bottom: 15px; border-bottom: 1px solid #ddd; width: 100%; }
-        .thumb { width: 100%; height: auto; max-height: 180px; object-fit: cover; background: #000; }
-        .v-info { padding: 8px; }
-        .v-title { font-size: 14px; font-weight: bold; color: #333; display: block; margin-bottom: 8px; }
+        .thumb { width: 100%; height: auto; max-height: 180px; object-fit: cover; background: #000; display: block; }
+        
+        .v-info { padding: 8px; text-align: left; }
+        .v-title { font-size: 14px; font-weight: bold; color: #333; margin-bottom: 8px; display: block; }
+        
         .btn { text-decoration: none; display: block; text-align: center; padding: 10px; border-radius: 4px; font-weight: bold; font-size: 14px; }
         .btn-blue { background: #0078d7; color: #fff; }
-        .btn-fb { background: #1877F2; color: #fff; padding: 5px 12px; font-size: 12px; border-radius: 3px; text-decoration: none; }
-        .btn-green { background: #28a745; color: #fff; padding: 5px 12px; font-size: 12px; border-radius: 3px; text-decoration: none; }
+        .btn-fb { background: #1877F2; color: #fff; padding: 6px 15px; font-size: 12px; border-radius: 3px; text-decoration: none; }
+        .btn-green { background: #28a745; color: #fff; padding: 6px 15px; font-size: 12px; border-radius: 3px; text-decoration: none; }
+        
         .btn-group { display: flex; gap: 5px; margin-top: 5px; }
-        .btn-sm { flex: 1; padding: 8px; font-size: 11px; color: #fff; text-decoration: none; border-radius: 3px; text-align: center; }
+        .btn-sm { flex: 1; padding: 8px; font-size: 11px; color: #fff; text-decoration: none; border-radius: 3px; text-align: center; font-weight: bold; }
         .btn-edit { background: #f39c12; }
         .btn-del { background: #dc3545; }
+        
         .pagination { padding: 20px; text-align: center; }
-        .btn-nav { background: #333; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 4px; }
+        .btn-nav { background: #333; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 4px; font-size: 13px; }
     </style>
 </head>
 <body>
@@ -54,13 +59,17 @@ HOME_HTML = """
         </div>
         <form action="/" method="GET" class="search-box">
             <input type="text" name="q" placeholder="Video dhoondein..." value="{{ q }}">
-            <button type="submit" style="background:#0078d7; color:#fff; border:none; padding:8px 12px;">Ok</button>
+            <button type="submit" style="background:#0078d7; color:#fff; border:none; padding:8px 12px; border-radius:2px;">Ok</button>
         </form>
     </div>
 
+    {% if not videos %}
+        <div style="text-align:center; padding:20px; font-size:14px; color:#666;">Kuch nahi mila!<br><br><a href="/" class="btn-nav">Wapas Jao</a></div>
+    {% endif %}
+
     {% for v in videos %}
     <div class="card">
-        <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/320x180?text=Video';">
+        <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/320x180?text=Video+Loading...';">
         <div class="v-info">
             <span class="v-title">{{ v.public_id }}</span>
             <a href="{{ v.secure_url }}" class="btn btn-blue">PLAY VIDEO</a>
@@ -75,36 +84,27 @@ HOME_HTML = """
     <div class="pagination">
         {% if q or next_cursor %}<a href="/" class="btn-nav">Main Page</a>{% endif %}
         {% if next_cursor and not q %}
-            <a href="/?next_cursor={{ next_cursor }}" class="btn-nav">Next >></a>
+            <a href="/?next_cursor={{ next_cursor }}" class="btn-nav">Next Page >></a>
         {% endif %}
     </div>
 </body>
 </html>
 """
 
-# --- NEW FACEBOOK PAGE ---
+# --- FB LITE PAGE ---
 @app.route('/facebook')
 def facebook():
     return render_template_string("""
-    <!DOCTYPE html>
     <html>
-    <head>
-        <title>Facebook Lite - JioTube</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
-            iframe { width: 100%; height: 100%; border: none; }
-            .back-btn { position: fixed; bottom: 10px; right: 10px; background: #333; color: white; padding: 8px 15px; text-decoration: none; border-radius: 20px; font-size: 12px; z-index: 1000; font-family: sans-serif; opacity: 0.8; }
-        </style>
-    </head>
-    <body>
-        <a href="/" class="back-btn"><< Back</a>
-        <iframe src="https://mbasic.facebook.com"></iframe>
+    <head><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+    <body style="margin:0;">
+        <a href="/" style="position:fixed; bottom:10px; right:10px; background:#333; color:white; padding:10px; text-decoration:none; border-radius:50px; font-size:12px; z-index:1000; font-family:sans-serif; opacity:0.8;">Back</a>
+        <iframe src="https://mbasic.facebook.com" style="width:100%; height:100vh; border:none;"></iframe>
     </body>
     </html>
     """)
 
-# --- BAKI SARE ROUTES (ADMIN LOGIC) ---
+# --- SEARCH & HOME LOGIC ---
 @app.route('/')
 def index():
     cursor = request.args.get('next_cursor')
@@ -123,12 +123,12 @@ def index():
     except: videos, nxt = [], None
     return render_template_string(HOME_HTML, videos=videos, next_cursor=nxt, q=q)
 
+# --- UPLOAD, RENAME, DELETE ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        if request.form.get('pw') == ADMIN_PASSWORD:
-            return render_template_string('''<body style="text-align:center; padding:15px; font-family:sans-serif;"><h3>Upload</h3><form id="upForm"><input type="file" id="fInp" required><br><br><input type="text" id="vInp" placeholder="Name" required style="width:85%; padding:10px;"><br><br><div id="pCont" style="display:none; width:100%; background:#ddd; height:20px; border-radius:10px; margin-bottom:15px;"><div id="pBar" style="width:0%; height:100%; background:#28a745; border-radius:10px; color:white; font-size:12px; text-align:center;">0%</div></div><button type="button" onclick="upNow()" id="upBtn" style="background:#28a745; color:white; padding:15px; width:95%; border:none; border-radius:5px;">START UPLOAD</button></form><script>function upNow(){var f=document.getElementById('fInp').files[0]; var n=document.getElementById('vInp').value; if(!f||!n)return; var fd=new FormData(); fd.append("file",f); fd.append("vname",n); var x=new XMLHttpRequest(); x.upload.onprogress=function(e){var p=Math.round((e.loaded/e.total)*100); document.getElementById('pCont').style.display="block"; document.getElementById('pBar').style.width=p+"%"; document.getElementById('pBar').innerHTML=p+"%";}; x.onreadystatechange=function(){if(x.readyState==4)window.location.href="/";}; x.open("POST","/do-upload",true); document.getElementById('upBtn').disabled=true; x.send(fd);}</script><br><a href="/">Back</a></body>''')
-    return '''<body style="text-align:center; padding:50px;"><form method="POST"><input type="password" name="pw"><button type="submit">Go</button></form></body>'''
+    if request.method == 'POST' and request.form.get('pw') == ADMIN_PASSWORD:
+        return render_template_string('''<body style="text-align:center; padding:15px; font-family:sans-serif;"><h3>Upload</h3><form id="upForm"><input type="file" id="fInp" required><br><br><input type="text" id="vInp" placeholder="Name" required style="width:80%; padding:10px;"><br><br><button type="button" onclick="upNow()" id="upBtn" style="background:green; color:white; padding:15px; width:90%; border:none; border-radius:5px;">START UPLOAD</button></form><script>function upNow(){var f=document.getElementById('fInp').files[0]; var n=document.getElementById('vInp').value; var fd=new FormData(); fd.append("file",f); fd.append("vname",n); var x=new XMLHttpRequest(); x.onreadystatechange=function(){if(x.readyState==4)window.location.href="/";}; x.open("POST","/do-upload",true); x.send(fd);}</script></body>''')
+    return '<body style="text-align:center; padding:50px;"><form method="POST"><input type="password" name="pw"><button type="submit">Go</button></form></body>'
 
 @app.route('/do-upload', methods=['POST'])
 def do_upload():
@@ -139,7 +139,7 @@ def do_upload():
 @app.route('/rename-page')
 def rename_page():
     pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Rename</h3><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" placeholder="New" required style="padding:10px;"><br><br><input type="password" name="pw" placeholder="Pass" required style="padding:10px;"><br><br><button type="submit">Update</button></form></body>''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Rename</h3><form action="/confirm-rename" method="POST"><input type="hidden" name="old_pid" value="{{pid}}"><input type="text" name="new_pid" required style="padding:10px;"><br><br><input type="password" name="pw" placeholder="Pass" required style="padding:10px;"><br><br><button type="submit">Update</button></form></body>''', pid=pid)
 
 @app.route('/confirm-rename', methods=['POST'])
 def confirm_rename():
@@ -150,7 +150,7 @@ def confirm_rename():
 @app.route('/delete-page')
 def delete_page():
     pid = request.args.get('pid')
-    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Delete?</h3><p>{{pid}}</p><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" placeholder="Pass" required style="padding:10px;"><br><br><button type="submit" style="background:red; color:white;">Delete</button></form></body>''', pid=pid)
+    return render_template_string('''<body style="text-align:center;padding:20px;"><h3>Delete?</h3><p>{{pid}}</p><form action="/confirm-del" method="POST"><input type="hidden" name="pid" value="{{pid}}"><input type="password" name="pw" required style="padding:10px;"><br><br><button type="submit" style="background:red; color:white; padding:10px;">Delete Video</button></form></body>''', pid=pid)
 
 @app.route('/confirm-del', methods=['POST'])
 def confirm_del():

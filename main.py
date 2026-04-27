@@ -16,7 +16,7 @@ cloudinary.config(
 
 ADMIN_PASSWORD = "809047"
 
-# --- HOME PAGE UI ---
+# --- HOME PAGE UI (Saare Buttons Ke Saath) ---
 HOME_HTML = """
 <!DOCTYPE html>
 <html>
@@ -82,30 +82,29 @@ HOME_HTML = """
 </html>
 """
 
-# --- FB PROXY PAGE (Reels & Full Access) ---
+# --- MINI BROWSER PROXY PAGE ---
 @app.route('/facebook')
 def facebook():
-    # Google Web Light Proxy ya similar bypass use karke load kar rahe hain
-    proxy_url = "https://www.facebook.com/reels/"
+    # Proxy service ka use jo frame error ko khatam kar dega
+    proxy_url = "https://www.google.com/search?q=facebook+reels&btnI" # Lucky search for bypass
+    # Ya direct mobile friendly proxy
+    fb_link = "https://m.facebook.com/reels/"
     return render_template_string("""
     <html>
-    <head>
-        <title>FB Reels Proxy</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #000; }
-            iframe { width: 100%; height: 100%; border: none; }
-            .back-float { position: fixed; bottom: 15px; left: 15px; background: #0078d7; color: white; padding: 10px 20px; text-decoration: none; border-radius: 50px; font-weight: bold; z-index: 9999; font-family: sans-serif; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
-        </style>
-    </head>
-    <body>
-        <a href="/" class="back-float">HOME</a>
-        <iframe src="https://m.facebook.com/reels/"></iframe>
+    <head><title>FB Mini Browser</title><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+    <body style="margin:0; background:#000;">
+        <div style="background:#333; padding:5px; text-align:center;">
+            <a href="/" style="color:white; text-decoration:none; font-weight:bold; font-size:12px;">[ EXIT FACEBOOK ]</a>
+        </div>
+        <object data="https://mbasic.facebook.com/reels/" width="100%" height="100%">
+            <embed src="https://mbasic.facebook.com/reels/" width="100%" height="100%"></embed>
+            Error: <a href="https://mbasic.facebook.com/reels/" style="color:white;">Click here to open FB</a>
+        </object>
     </body>
     </html>
     """)
 
-# --- SEARCH & ADMIN LOGIC (Wahi Stable Code) ---
+# --- SEARCH & ADMIN LOGIC (No Changes Here) ---
 @app.route('/')
 def index():
     cursor = request.args.get('next_cursor')

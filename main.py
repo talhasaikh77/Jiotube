@@ -16,7 +16,7 @@ cloudinary.config(
 
 ADMIN_PASSWORD = "809047"
 
-# --- HOME PAGE UI (Saare Buttons Mehfooz Hain) ---
+# --- HOME PAGE UI ---
 HOME_HTML = """
 <!DOCTYPE html>
 <html>
@@ -50,17 +50,17 @@ HOME_HTML = """
         <b style="color:#0078d7; font-size: 20px;">JioTube Pro</b><br><br>
         <div class="nav-buttons">
             <a href="/login" class="btn-green">Upload</a>
-            <a href="/fb-proxy" class="btn-fb">Facebook</a>
+            <a href="https://www.croxyproxy.com/_en/proxify?url=https%3A%2F%2Fm.facebook.com%2F" target="_blank" class="btn-fb">Facebook</a>
         </div>
         <form action="/" method="GET" class="search-box">
-            <input type="text" name="q" placeholder="Video dhoondein..." value="{{ q }}">
+            <input type="text" name="q" placeholder="Dhoondein..." value="{{ q }}">
             <button type="submit" style="background:#0078d7; color:#fff; border:none; padding:8px 12px; border-radius:2px;">Ok</button>
         </form>
     </div>
 
     {% for v in videos %}
     <div class="card">
-        <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/320x180?text=Video+Loading...';">
+        <img src="{{ v.secure_url.rsplit('.', 1)[0] + '.jpg' }}" class="thumb" onerror="this.src='https://via.placeholder.com/320x180?text=Video';">
         <div class="v-info">
             <span class="v-title">{{ v.public_id }}</span>
             <a href="{{ v.secure_url }}" class="btn btn-blue">PLAY VIDEO</a>
@@ -82,17 +82,7 @@ HOME_HTML = """
 </html>
 """
 
-# --- NEW PROXY REDIRECT LOGIC ---
-@app.route('/fb-proxy')
-def fb_proxy():
-    # Ye proxy Facebook ko pichka kar (compress) dikhayega
-    # Hum 'mbasic' ko ek web-proxy ke through redirect kar rahe hain
-    target = "https://mbasic.facebook.com/reels/"
-    proxy_gateway = f"https://api.allorigins.win/get?url={target}" # Backup proxy method
-    # Direct redirect to compressed mode with a special header
-    return redirect(f"https://googleweblight.com/i?u={target}")
-
-# --- REST OF THE CODE (No Changes to Search/Rename/Delete/Upload) ---
+# --- ADMIN LOGIC ---
 @app.route('/')
 def index():
     cursor = request.args.get('next_cursor'); q = request.args.get('q', '').strip().lower()

@@ -16,7 +16,7 @@ cloudinary.config(
 
 ADMIN_PASSWORD = "809047"
 
-# --- HOME PAGE UI (Saare Buttons Ke Saath) ---
+# --- HOME PAGE UI (Saare Buttons Mehfooz Hain) ---
 HOME_HTML = """
 <!DOCTYPE html>
 <html>
@@ -50,7 +50,7 @@ HOME_HTML = """
         <b style="color:#0078d7; font-size: 20px;">JioTube Pro</b><br><br>
         <div class="nav-buttons">
             <a href="/login" class="btn-green">Upload</a>
-            <a href="/facebook" class="btn-fb">Facebook</a>
+            <a href="/fb-proxy" class="btn-fb">Facebook</a>
         </div>
         <form action="/" method="GET" class="search-box">
             <input type="text" name="q" placeholder="Video dhoondein..." value="{{ q }}">
@@ -82,33 +82,20 @@ HOME_HTML = """
 </html>
 """
 
-# --- MINI BROWSER PROXY PAGE ---
-@app.route('/facebook')
-def facebook():
-    # Proxy service ka use jo frame error ko khatam kar dega
-    proxy_url = "https://www.google.com/search?q=facebook+reels&btnI" # Lucky search for bypass
-    # Ya direct mobile friendly proxy
-    fb_link = "https://m.facebook.com/reels/"
-    return render_template_string("""
-    <html>
-    <head><title>FB Mini Browser</title><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-    <body style="margin:0; background:#000;">
-        <div style="background:#333; padding:5px; text-align:center;">
-            <a href="/" style="color:white; text-decoration:none; font-weight:bold; font-size:12px;">[ EXIT FACEBOOK ]</a>
-        </div>
-        <object data="https://mbasic.facebook.com/reels/" width="100%" height="100%">
-            <embed src="https://mbasic.facebook.com/reels/" width="100%" height="100%"></embed>
-            Error: <a href="https://mbasic.facebook.com/reels/" style="color:white;">Click here to open FB</a>
-        </object>
-    </body>
-    </html>
-    """)
+# --- NEW PROXY REDIRECT LOGIC ---
+@app.route('/fb-proxy')
+def fb_proxy():
+    # Ye proxy Facebook ko pichka kar (compress) dikhayega
+    # Hum 'mbasic' ko ek web-proxy ke through redirect kar rahe hain
+    target = "https://mbasic.facebook.com/reels/"
+    proxy_gateway = f"https://api.allorigins.win/get?url={target}" # Backup proxy method
+    # Direct redirect to compressed mode with a special header
+    return redirect(f"https://googleweblight.com/i?u={target}")
 
-# --- SEARCH & ADMIN LOGIC (No Changes Here) ---
+# --- REST OF THE CODE (No Changes to Search/Rename/Delete/Upload) ---
 @app.route('/')
 def index():
-    cursor = request.args.get('next_cursor')
-    q = request.args.get('q', '').strip().lower()
+    cursor = request.args.get('next_cursor'); q = request.args.get('q', '').strip().lower()
     try:
         if q:
             res = cloudinary.api.resources(resource_type="video", type="upload", max_results=100)

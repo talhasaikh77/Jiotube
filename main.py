@@ -18,7 +18,6 @@ def process_pdf_background(pdf_path, pdf_name):
         doc = fitz.open(pdf_path)
         for i in range(len(doc)):
             page = doc.load_page(i)
-            # DPI 200 is better for large books to avoid timeout
             pix = page.get_pixmap(dpi=200)
             img_path = f"p{i+1}_{pdf_name}.png"
             pix.save(img_path)
@@ -26,8 +25,7 @@ def process_pdf_background(pdf_path, pdf_name):
             if os.path.exists(img_path): os.remove(img_path)
         doc.close()
         if os.path.exists(pdf_path): os.remove(pdf_path)
-    except Exception as e:
-        print(f"Error: {e}")
+    except: pass
 
 @app.route("/")
 def index():
@@ -38,8 +36,12 @@ def index():
         videos = [v for v in res.get("resources", []) if q in v.get("public_id", "").lower()]
         new_c = res.get("next_cursor")
     except: videos = []; new_c = None
+    
     v_list = "".join([f"""<div style="background:#fff;border-bottom:2px solid #ddd;padding:5px;margin-bottom:10px;"><img src="{v["secure_url"].rsplit(".", 1)[0]}.jpg" style="width:100%;max-height:150px;object-fit:fill;background:#000;display:block;"><b style="font-size:12px;display:block;padding:5px;color:#333;">{v["public_id"]}</b><div style="display:flex;flex-wrap:wrap;gap:4px;padding:2px;"><a href="{v["secure_url"]}" style="flex:1;background:#0078d7;color:#fff;text-align:center;padding:8px;text-decoration:none;font-size:10px;border-radius:4px;font-weight:bold;">PLAY</a><a href="{v["secure_url"].replace("/upload/","/upload/fl_attachment/")}" style="flex:1;background:#28a745;color:#fff;text-align:center;padding:8px;text-decoration:none;font-size:10px;border-radius:4px;font-weight:bold;">SAVE</a><a href="/modify?task=rename&pid={v["public_id"]}&type=video" style="flex:1;background:orange;color:#fff;text-align:center;padding:8px;text-decoration:none;font-size:10px;border-radius:4px;font-weight:bold;">NAME</a><a href="/modify?task=delete&pid={v["public_id"]}&type=video" style="flex:1;background:red;color:#fff;text-align:center;padding:8px;text-decoration:none;font-size:10px;border-radius:4px;font-weight:bold;">DEL</a></div></div>""" for v in videos])
-    return f"""<body style="margin:0;font-family:sans-serif;background:#eee;"><div style="background:#0078d7;color:#fff;padding:10px;text-align:center;position:sticky;top:0;z-index:100;"><h3 style="margin:0;">JioTube Pro</h3><div style="display:flex;gap:5px;margin-top:8px;"><a href="/admin_upload" style="flex:1;background:#28a745;color:#fff;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">+ UPLOAD</a><a href="/pdf_home" style="flex:1;background:#e74c3c;color:#fff;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">PDF VIEWER</a></div><form action="/" style="margin-top:8px;display:flex;"><input type="text" name="q" value="{q}" placeholder="Search Videos..." style="flex:1;padding:8px;border:none;border-radius:4px 0 0 4px;"><button style="background:#333;color:#fff;border:none;padding:8px 15px;border-radius:0 4px 4px 0;font-weight:bold;">GO</button></form></div>{v_list if v_list else "<p style='text-align:center;padding:20px;'>No Results Found</p>"}</body>"""
+    
+    next_btn = f"<a href='/?next={new_c}&q={q}' style='display:block;background:#333;color:#fff;text-align:center;padding:15px;text-decoration:none;font-weight:bold;margin:10px;border-radius:5px;'>LOAD NEXT VIDEOS ↓</a>" if new_c else ""
+    
+    return f"""<body style="margin:0;font-family:sans-serif;background:#eee;"><div style="background:#0078d7;color:#fff;padding:10px;text-align:center;position:sticky;top:0;z-index:100;"><h3 style="margin:0;">JioTube Pro</h3><div style="display:flex;gap:5px;margin-top:8px;"><a href="/admin_upload" style="flex:1;background:#28a745;color:#fff;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">+ UPLOAD</a><a href="/pdf_home" style="flex:1;background:#e74c3c;color:#fff;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">PDF VIEWER</a></div><form action="/" style="margin-top:8px;display:flex;"><input type="text" name="q" value="{q}" placeholder="Search Videos..." style="flex:1;padding:8px;border:none;border-radius:4px 0 0 4px;"><button style="background:#333;color:#fff;border:none;padding:8px 15px;border-radius:0 4px 4px 0;font-weight:bold;">GO</button></form></div>{v_list if v_list else "<p style='text-align:center;padding:20px;'>No Results Found</p>"}{next_btn}</body>"""
 
 @app.route("/pdf_home")
 def pdf_home():
@@ -49,6 +51,24 @@ def pdf_home():
     f_list = "".join([f"""<div style="background:#fff;border-bottom:2px solid #ddd;padding:10px;margin-bottom:5px;"><b style="font-size:13px;display:block;color:#e74c3c;margin-bottom:8px;">{f["name"].upper()}</b><div style="display:flex;gap:4px;"><a href="/view_pdf?name={f["name"]}" style="flex:2;background:#e74c3c;color:#fff;padding:10px;text-align:center;text-decoration:none;border-radius:4px;font-size:11px;font-weight:bold;">OPEN PDF</a><a href="/modify?task=rename&pid={f["name"]}&type=pdf" style="flex:1;background:orange;color:#fff;padding:10px;text-align:center;text-decoration:none;border-radius:4px;font-size:11px;font-weight:bold;">NAME</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" style="flex:1;background:red;color:#fff;padding:10px;text-align:center;text-decoration:none;border-radius:4px;font-size:11px;font-weight:bold;">DEL</a></div></div>""" for f in folders if q in f["name"].lower()])
     return f"""<body style="margin:0;font-family:sans-serif;background:#f9f9f9;"><div style="background:#e74c3c;color:#fff;padding:10px;text-align:center;position:sticky;top:0;z-index:100;"><h3 style="margin:0;">PDF Archive</h3><div style="display:flex;gap:5px;margin-top:8px;"><a href="/" style="flex:1;background:#333;color:#fff;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">HOME</a><a href="/upload_pdf_page" style="flex:1;background:#fff;color:#e74c3c;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">+ NEW PDF</a></div><form action="/pdf_home" style="margin-top:8px;display:flex;"><input type="text" name="q" value="{q}" placeholder="Search PDFs..." style="flex:1;padding:8px;border:none;border-radius:4px 0 0 4px;"><button style="background:#333;color:#fff;border:none;padding:8px 15px;border-radius:0 4px 4px 0;font-weight:bold;">GO</button></form></div>{f_list if f_list else "<p style='text-align:center;padding:20px;'>No PDFs Found</p>"}</body>"""
 
+@app.route("/view_pdf")
+def view_pdf():
+    name = request.args.get("name")
+    next_c = request.args.get("next")
+    ts = int(time.time())
+    try:
+        res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{name}/", max_results=10, next_cursor=next_c)
+        pages = sorted(res.get("resources", []), key=lambda x: x["public_id"])
+        new_c = res.get("next_cursor")
+    except: pages = []; new_c = None
+    
+    h = "".join([f"""<div style="background:#000;margin-bottom:15px;text-align:center;border-bottom:3px solid #e74c3c;"><img src="{p["secure_url"]}?v={ts}" style="width:100%;display:block;"><div style="padding:10px;background:#333;"><a href="{p["secure_url"].rsplit(".", 1)[0]}.jpg" style="background:#28a745;color:#fff;font-size:11px;text-decoration:none;padding:8px 20px;border-radius:5px;font-weight:bold;">DOWNLOAD JPG</a></div></div>""" for p in pages])
+    
+    next_btn = f"<a href='/view_pdf?name={name}&next={new_c}' style='display:block;background:#e74c3c;color:#fff;padding:18px;text-align:center;text-decoration:none;font-weight:bold;font-size:14px;border-radius:5px;margin:10px;'>LOAD NEXT 10 PAGES →</a>" if new_c else ""
+    
+    return f"""<body style="margin:0;background:#111;"><div style="background:#fff;padding:10px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid #e74c3c;"><a href="/pdf_home" style="text-decoration:none;font-size:13px;color:#e74c3c;font-weight:bold;">← BACK</a><b style="font-size:12px;color:#333;">{name[:15].upper()}</b><span></span></div>{h}{next_btn}</body>"""
+
+# Baki Functions (upload, modify, confirm) yahan same rahenge
 def get_upload_template(target_url, title, theme_color):
     return render_template_string("""
     <body style="padding:20px;font-family:sans-serif;text-align:center;background:#f0f0f0;">
@@ -58,15 +78,13 @@ def get_upload_template(target_url, title, theme_color):
                 <input type="file" name="file" id="fileInput" style="margin-bottom:15px;width:100%;"><br>
                 <input type="text" name="name" id="nameInput" placeholder="Enter Name" style="width:95%;padding:12px;margin-bottom:10px;border:1px solid #ddd;border-radius:5px;">
                 <input type="password" name="pw" id="pwInput" placeholder="Admin Pass" style="width:95%;padding:12px;margin-bottom:15px;border:1px solid #ddd;border-radius:5px;">
-                
                 <div id="progressWrapper" style="display:none;margin-bottom:15px;">
                     <div style="background:#eee;border-radius:10px;overflow:hidden;height:25px;border:1px solid #ccc;position:relative;">
                         <div id="progressBar" style="width:0%;height:100%;background:{{theme_color}};transition:width 0.2s;"></div>
                         <small id="percentText" style="position:absolute;width:100%;left:0;top:4px;color:#000;font-weight:bold;">0%</small>
                     </div>
-                    <p id="statusText" style="color:#666;font-size:12px;margin-top:5px;">Uploading to server...</p>
+                    <p id="statusText" style="color:#666;font-size:12px;margin-top:5px;">Uploading...</p>
                 </div>
-
                 <button type="button" onclick="uploadFile()" id="upBtn" style="width:100%;padding:15px;background:{{theme_color}};color:#fff;border:none;border-radius:5px;font-weight:bold;">START UPLOAD</button>
             </form>
         </div>
@@ -76,18 +94,14 @@ def get_upload_template(target_url, title, theme_color):
             var name = document.getElementById('nameInput').value;
             var pw = document.getElementById('pwInput').value;
             if(!file || !name || !pw) { alert("Details bhariye!"); return; }
-
             var formData = new FormData();
             formData.append("file", file);
             formData.append("name", name);
             formData.append("pw", pw);
-
             document.getElementById('progressWrapper').style.display = 'block';
             document.getElementById('upBtn').disabled = true;
-
             var xhr = new XMLHttpRequest();
             xhr.open("POST", "{{target_url}}", true);
-
             xhr.upload.onprogress = function(e) {
                 if (e.lengthComputable) {
                     var percent = Math.round((e.loaded / e.total) * 100);
@@ -95,15 +109,11 @@ def get_upload_template(target_url, title, theme_color):
                     document.getElementById('percentText').innerText = percent + "%";
                 }
             };
-
             xhr.onload = function() {
                 if (xhr.status == 200) {
-                    document.getElementById('statusText').innerText = "Processing in Background... Check PDF Archive in 1-2 mins.";
-                    setTimeout(() => { window.location.href = "/pdf_home"; }, 2000);
-                } else {
-                    alert("Error: " + xhr.responseText);
-                    document.getElementById('upBtn').disabled = false;
-                }
+                    document.getElementById('statusText').innerText = "Process Started! Please wait...";
+                    setTimeout(() => { window.location.href = (window.location.pathname == "/admin_upload") ? "/" : "/pdf_home"; }, 2000);
+                } else { alert("Error: " + xhr.responseText); document.getElementById('upBtn').disabled = false; }
             };
             xhr.send(formData);
         }
@@ -112,12 +122,9 @@ def get_upload_template(target_url, title, theme_color):
     """, title=title, theme_color=theme_color, target_url=target_url)
 
 @app.route("/admin_upload")
-def admin_upload():
-    return get_upload_template("/do_up", "Upload Video", "#28a745")
-
+def admin_upload(): return get_upload_template("/do_up", "Upload Video", "#28a745")
 @app.route("/upload_pdf_page")
-def upload_pdf_page():
-    return get_upload_template("/do_pdf_upload", "Upload PDF", "#e74c3c")
+def upload_pdf_page(): return get_upload_template("/do_pdf_upload", "Upload PDF", "#e74c3c")
 
 @app.route("/do_up", methods=["POST"])
 def do_up():
@@ -134,23 +141,9 @@ def do_pdf_upload():
         if f:
             pdf_path = f"temp_{int(time.time())}.pdf"
             f.save(pdf_path)
-            # Use Threading for large files to avoid Render Timeout
             threading.Thread(target=process_pdf_background, args=(pdf_path, n)).start()
             return "OK"
     return "Wrong Password", 403
-
-@app.route("/view_pdf")
-def view_pdf():
-    name = request.args.get("name")
-    next_c = request.args.get("next")
-    ts = int(time.time())
-    try:
-        res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{name}/", max_results=15, next_cursor=next_c)
-        pages = sorted(res.get("resources", []), key=lambda x: x["public_id"])
-        new_c = res.get("next_cursor")
-    except: pages = []; new_c = None
-    h = "".join([f"""<div style="background:#000;margin-bottom:15px;text-align:center;border-bottom:3px solid #e74c3c;"><img src="{p["secure_url"]}?v={ts}" style="width:100%;display:block;"><div style="padding:10px;background:#333;"><a href="{p["secure_url"].rsplit(".", 1)[0]}.jpg" style="background:#28a745;color:#fff;font-size:11px;text-decoration:none;padding:8px 20px;border-radius:5px;font-weight:bold;">DOWNLOAD JPG</a></div></div>""" for p in pages])
-    return f"""<body style="margin:0;background:#111;"><div style="background:#fff;padding:10px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid #e74c3c;"><a href="/pdf_home" style="text-decoration:none;font-size:13px;color:#e74c3c;font-weight:bold;">← BACK</a><b style="font-size:12px;color:#333;">{name[:15].upper()}</b><span></span></div>{h} {f"<a href='/view_pdf?name="+name+"&next="+new_c+"' style='display:block;background:#e74c3c;color:#fff;padding:18px;text-align:center;text-decoration:none;font-weight:bold;font-size:14px;border-radius:5px;margin:10px;'>LOAD MORE PAGES →</a>" if new_c else ""}</body>"""
 
 @app.route("/modify")
 def modify():
@@ -169,8 +162,7 @@ def confirm():
             if t == "rename":
                 new_n = request.form.get("new").replace(" ","_")
                 res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{p}/")
-                for r in res.get("resources", []):
-                    cloudinary.uploader.rename(r["public_id"], r["public_id"].replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/"))
+                for r in res.get("resources", []): cloudinary.uploader.rename(r["public_id"], r["public_id"].replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/"))
             elif t == "delete":
                 cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/")
                 cloudinary.api.delete_folder(f"pdf_data/{p}")

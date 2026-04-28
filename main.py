@@ -4,6 +4,7 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 import time
+import threading
 from flask import Flask, request, redirect, render_template_string, jsonify
 
 app = Flask(__name__)
@@ -11,6 +12,22 @@ app = Flask(__name__)
 # Config
 cloudinary.config(cloud_name="dawterffe", api_key="258318685843824", api_secret="NxTNXBeLmupMQ0S1FOPU9t6bcjo", secure=True)
 ADMIN_PASSWORD = "809047"
+
+def process_pdf_background(pdf_path, pdf_name):
+    try:
+        doc = fitz.open(pdf_path)
+        for i in range(len(doc)):
+            page = doc.load_page(i)
+            # DPI 200 is better for large books to avoid timeout
+            pix = page.get_pixmap(dpi=200)
+            img_path = f"p{i+1}_{pdf_name}.png"
+            pix.save(img_path)
+            cloudinary.uploader.upload(img_path, public_id=f"p{i+1}", folder=f"pdf_data/{pdf_name}", resource_type="image", quality="auto")
+            if os.path.exists(img_path): os.remove(img_path)
+        doc.close()
+        if os.path.exists(pdf_path): os.remove(pdf_path)
+    except Exception as e:
+        print(f"Error: {e}")
 
 @app.route("/")
 def index():
@@ -47,19 +64,18 @@ def get_upload_template(target_url, title, theme_color):
                         <div id="progressBar" style="width:0%;height:100%;background:{{theme_color}};transition:width 0.2s;"></div>
                         <small id="percentText" style="position:absolute;width:100%;left:0;top:4px;color:#000;font-weight:bold;">0%</small>
                     </div>
-                    <p id="statusText" style="color:#666;font-size:12px;margin-top:5px;">Starting...</p>
+                    <p id="statusText" style="color:#666;font-size:12px;margin-top:5px;">Uploading to server...</p>
                 </div>
 
-                <button type="button" onclick="uploadFile()" id="upBtn" style="width:100%;padding:15px;background:{{theme_color}};color:#fff;border:none;border-radius:5px;font-weight:bold;">UPLOAD NOW</button>
+                <button type="button" onclick="uploadFile()" id="upBtn" style="width:100%;padding:15px;background:{{theme_color}};color:#fff;border:none;border-radius:5px;font-weight:bold;">START UPLOAD</button>
             </form>
         </div>
-
         <script>
         function uploadFile() {
             var file = document.getElementById('fileInput').files[0];
             var name = document.getElementById('nameInput').value;
             var pw = document.getElementById('pwInput').value;
-            if(!file || !name || !pw) { alert("Sari details bhariye!"); return; }
+            if(!file || !name || !pw) { alert("Details bhariye!"); return; }
 
             var formData = new FormData();
             formData.append("file", file);
@@ -74,34 +90,21 @@ def get_upload_template(target_url, title, theme_color):
 
             xhr.upload.onprogress = function(e) {
                 if (e.lengthComputable) {
-                    var percent = Math.round((e.loaded / e.total) * 95); // 95% tak server upload
+                    var percent = Math.round((e.loaded / e.total) * 100);
                     document.getElementById('progressBar').style.width = percent + '%';
                     document.getElementById('percentText').innerText = percent + "%";
-                    document.getElementById('statusText').innerText = "Uploading to server...";
                 }
             };
 
             xhr.onload = function() {
                 if (xhr.status == 200) {
-                    document.getElementById('progressBar').style.width = '100%';
-                    document.getElementById('percentText').innerText = "100%";
-                    document.getElementById('statusText').innerText = "Cloudinary Processing Done!";
-                    setTimeout(() => { 
-                        window.location.href = (window.location.pathname == "/admin_upload") ? "/" : "/pdf_home"; 
-                    }, 1000);
+                    document.getElementById('statusText').innerText = "Processing in Background... Check PDF Archive in 1-2 mins.";
+                    setTimeout(() => { window.location.href = "/pdf_home"; }, 2000);
                 } else {
                     alert("Error: " + xhr.responseText);
                     document.getElementById('upBtn').disabled = false;
                 }
             };
-            
-            // Jab server process kar raha ho
-            xhr.onreadystatechange = function() {
-                if(xhr.readyState == 3) {
-                    document.getElementById('statusText').innerText = "Converting & Syncing with Cloudinary...";
-                }
-            }
-
             xhr.send(formData);
         }
         </script>
@@ -131,16 +134,8 @@ def do_pdf_upload():
         if f:
             pdf_path = f"temp_{int(time.time())}.pdf"
             f.save(pdf_path)
-            doc = fitz.open(pdf_path)
-            for i in range(len(doc)):
-                page = doc.load_page(i)
-                pix = page.get_pixmap(dpi=300)
-                img_path = f"p{i+1}_{n}.png"
-                pix.save(img_path)
-                cloudinary.uploader.upload(img_path, public_id=f"p{i+1}", folder=f"pdf_data/{n}", resource_type="image", lossless=True)
-                if os.path.exists(img_path): os.remove(img_path)
-            doc.close()
-            if os.path.exists(pdf_path): os.remove(pdf_path)
+            # Use Threading for large files to avoid Render Timeout
+            threading.Thread(target=process_pdf_background, args=(pdf_path, n)).start()
             return "OK"
     return "Wrong Password", 403
 
@@ -150,12 +145,12 @@ def view_pdf():
     next_c = request.args.get("next")
     ts = int(time.time())
     try:
-        res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{name}/", max_results=10, next_cursor=next_c)
+        res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{name}/", max_results=15, next_cursor=next_c)
         pages = sorted(res.get("resources", []), key=lambda x: x["public_id"])
         new_c = res.get("next_cursor")
     except: pages = []; new_c = None
-    h = "".join([f"""<div style="background:#000;margin-bottom:15px;text-align:center;border-bottom:3px solid #e74c3c;"><img src="{p["secure_url"]}?v={ts}" style="width:100%;display:block;"><div style="padding:10px;background:#333;"><a href="{p["secure_url"].replace("/upload/","/upload/fl_attachment/").rsplit(".", 1)[0]}.jpg" style="background:#28a745;color:#fff;font-size:11px;text-decoration:none;padding:8px 20px;border-radius:5px;font-weight:bold;">DOWNLOAD JPG</a></div></div>""" for p in pages])
-    return f"""<body style="margin:0;background:#111;"><div style="background:#fff;padding:10px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid #e74c3c;"><a href="/pdf_home" style="text-decoration:none;font-size:13px;color:#e74c3c;font-weight:bold;">← BACK</a><b style="font-size:12px;color:#333;">{name[:15].upper()}</b><span></span></div>{h} {f"<a href='/view_pdf?name="+name+"&next="+new_c+"' style='display:block;background:#e74c3c;color:#fff;padding:18px;text-align:center;text-decoration:none;font-weight:bold;font-size:14px;border-radius:5px;margin:10px;'>NEXT 10 PAGES →</a>" if new_c else ""}</body>"""
+    h = "".join([f"""<div style="background:#000;margin-bottom:15px;text-align:center;border-bottom:3px solid #e74c3c;"><img src="{p["secure_url"]}?v={ts}" style="width:100%;display:block;"><div style="padding:10px;background:#333;"><a href="{p["secure_url"].rsplit(".", 1)[0]}.jpg" style="background:#28a745;color:#fff;font-size:11px;text-decoration:none;padding:8px 20px;border-radius:5px;font-weight:bold;">DOWNLOAD JPG</a></div></div>""" for p in pages])
+    return f"""<body style="margin:0;background:#111;"><div style="background:#fff;padding:10px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid #e74c3c;"><a href="/pdf_home" style="text-decoration:none;font-size:13px;color:#e74c3c;font-weight:bold;">← BACK</a><b style="font-size:12px;color:#333;">{name[:15].upper()}</b><span></span></div>{h} {f"<a href='/view_pdf?name="+name+"&next="+new_c+"' style='display:block;background:#e74c3c;color:#fff;padding:18px;text-align:center;text-decoration:none;font-weight:bold;font-size:14px;border-radius:5px;margin:10px;'>LOAD MORE PAGES →</a>" if new_c else ""}</body>"""
 
 @app.route("/modify")
 def modify():

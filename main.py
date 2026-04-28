@@ -5,10 +5,11 @@ import cloudinary.uploader
 import cloudinary.api
 import time
 import threading
-from flask import Flask, request, redirect, render_template_string
+from flask import Flask, request, redirect, render_template_string, jsonify
 
 app = Flask(__name__)
 
+# Config
 cloudinary.config(cloud_name="dawterffe", api_key="258318685843824", api_secret="NxTNXBeLmupMQ0S1FOPU9t6bcjo", secure=True)
 ADMIN_PASSWORD = "809047"
 
@@ -46,6 +47,98 @@ def pdf_home():
     f_list = "".join([f"""<div style="background:#fff;border-bottom:2px solid #ddd;padding:10px;margin-bottom:5px;"><b style="font-size:13px;display:block;color:#e74c3c;margin-bottom:8px;">{f["name"].upper()}</b><div style="display:flex;gap:4px;"><a href="/view_pdf?name={f["name"]}" style="flex:2;background:#e74c3c;color:#fff;padding:10px;text-align:center;text-decoration:none;border-radius:4px;font-size:11px;font-weight:bold;">OPEN PDF</a><a href="/modify?task=rename&pid={f["name"]}&type=pdf" style="flex:1;background:orange;color:#fff;padding:10px;text-align:center;text-decoration:none;border-radius:4px;font-size:11px;font-weight:bold;">NAME</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" style="flex:1;background:red;color:#fff;padding:10px;text-align:center;text-decoration:none;border-radius:4px;font-size:11px;font-weight:bold;">DEL</a></div></div>""" for f in folders if q in f["name"].lower()])
     return f"""<body style="margin:0;font-family:sans-serif;background:#f9f9f9;"><div style="background:#e74c3c;color:#fff;padding:10px;text-align:center;position:sticky;top:0;z-index:100;"><h3 style="margin:0;">PDF Archive</h3><div style="display:flex;gap:5px;margin-top:8px;"><a href="/" style="flex:1;background:#333;color:#fff;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">HOME</a><a href="/upload_pdf_page" style="flex:1;background:#fff;color:#e74c3c;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">+ NEW PDF</a></div><form action="/pdf_home" style="margin-top:8px;display:flex;"><input type="text" name="q" value="{q}" placeholder="Search PDFs..." style="flex:1;padding:8px;border:none;border-radius:4px 0 0 4px;"><button style="background:#333;color:#fff;border:none;padding:8px 15px;border-radius:0 4px 4px 0;font-weight:bold;">GO</button></form></div>{f_list if f_list else "<p style='text-align:center;padding:20px;'>No PDFs Found</p>"}</body>"""
 
+def get_upload_template(target_url, title, theme_color):
+    return render_template_string("""
+    <body style="padding:20px;font-family:sans-serif;text-align:center;background:#f0f0f0;">
+        <div style="background:#fff;padding:20px;border-radius:10px;max-width:400px;margin:auto;box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+            <h3 style="color:{{theme_color}};">{{title}}</h3>
+            <form id="uploadForm">
+                <input type="file" name="file" id="fileInput" style="margin-bottom:15px;width:100%;"><br>
+                <input type="text" name="name" id="nameInput" placeholder="Enter Name" style="width:95%;padding:12px;margin-bottom:10px;border:1px solid #ddd;border-radius:5px;">
+                <input type="password" name="pw" id="pwInput" placeholder="Admin Pass" style="width:95%;padding:12px;margin-bottom:15px;border:1px solid #ddd;border-radius:5px;">
+                
+                <div id="progressWrapper" style="display:none;margin-bottom:15px;">
+                    <div style="background:#eee;border-radius:10px;overflow:hidden;height:20px;border:1px solid #ccc;">
+                        <div id="progressBar" style="width:0%;height:100%;background:{{theme_color}};transition:width 0.3s;"></div>
+                    </div>
+                    <small id="statusText" style="color:#666;">Uploading: 0%</small>
+                </div>
+
+                <button type="button" onclick="uploadFile()" id="upBtn" style="width:100%;padding:15px;background:{{theme_color}};color:#fff;border:none;border-radius:5px;font-weight:bold;cursor:pointer;">START UPLOAD</button>
+            </form>
+            <br><a href="javascript:history.back()" style="color:#666;text-decoration:none;font-size:12px;">← Go Back</a>
+        </div>
+
+        <script>
+        function uploadFile() {
+            var file = document.getElementById('fileInput').files[0];
+            var name = document.getElementById('nameInput').value;
+            var pw = document.getElementById('pwInput').value;
+            if(!file || !name || !pw) { alert("Sari fields bharo!"); return; }
+
+            var formData = new FormData();
+            formData.append("file", file);
+            formData.append("name", name);
+            formData.append("pw", pw);
+
+            document.getElementById('progressWrapper').style.display = 'block';
+            document.getElementById('upBtn').disabled = true;
+            document.getElementById('upBtn').innerText = "UPLOADING...";
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "{{target_url}}", true);
+
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    var percent = Math.round((e.loaded / e.total) * 100);
+                    document.getElementById('progressBar').style.width = percent + '%';
+                    document.getElementById('statusText').innerText = "Uploading: " + percent + "%";
+                }
+            };
+
+            xhr.onload = function() {
+                if (xhr.status == 200) {
+                    alert("Upload Successful!");
+                    window.location.href = (window.location.pathname == "/admin_upload") ? "/" : "/pdf_home";
+                } else {
+                    alert("Error: " + xhr.responseText);
+                    document.getElementById('upBtn').disabled = false;
+                }
+            };
+            xhr.send(formData);
+        }
+        </script>
+    </body>
+    """, title=title, theme_color=theme_color, target_url=target_url)
+
+@app.route("/admin_upload")
+def admin_upload():
+    return get_upload_template("/do_up", "Upload Video", "#28a745")
+
+@app.route("/upload_pdf_page")
+def upload_pdf_page():
+    return get_upload_template("/do_pdf_upload", "Upload PDF", "#e74c3c")
+
+@app.route("/do_up", methods=["POST"])
+def do_up():
+    if request.form.get("pw") == ADMIN_PASSWORD:
+        f = request.files.get("file"); v = request.form.get("name", "video").replace(" ","_")
+        if f: cloudinary.uploader.upload(f, resource_type="video", public_id=v)
+        return "OK"
+    return "Wrong Password", 403
+
+@app.route("/do_pdf_upload", methods=["POST"])
+def do_pdf_upload():
+    if request.form.get("pw") == ADMIN_PASSWORD:
+        f = request.files.get("file"); n = request.form.get("name").replace(" ","_")
+        if f:
+            pdf_path = f"temp_{int(time.time())}.pdf"
+            f.save(pdf_path)
+            threading.Thread(target=process_pdf_background, args=(pdf_path, n)).start()
+            return "OK"
+    return "Wrong Password", 403
+
+# Reuse confirm/view_pdf/modify from previous version
 @app.route("/view_pdf")
 def view_pdf():
     name = request.args.get("name")
@@ -77,41 +170,12 @@ def confirm():
                 new_n = request.form.get("new").replace(" ","_")
                 res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{p}/")
                 for r in res.get("resources", []):
-                    old_id = r["public_id"]
-                    new_id = old_id.replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/")
-                    cloudinary.uploader.rename(old_id, new_id)
+                    cloudinary.uploader.rename(r["public_id"], r["public_id"].replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/"))
             elif t == "delete":
                 cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/")
                 cloudinary.api.delete_folder(f"pdf_data/{p}")
             return redirect("/pdf_home")
     return "Wrong Password"
-
-@app.route("/admin_upload")
-def admin_upload():
-    return """<body style="padding:20px;font-family:sans-serif;text-align:center;background:#f0f0f0;"><div style="background:#fff;padding:20px;border-radius:10px;"><h3>Upload Video</h3><form action="/do_up" method="POST" enctype="multipart/form-data"><input type="file" name="file" style="margin-bottom:15px;"><br><input type="text" name="vname" placeholder="Title" style="width:90%;padding:10px;margin-bottom:10px;"><input type="password" name="pw" placeholder="Pass" style="width:90%;padding:10px;margin-bottom:15px;"><button style="width:100%;padding:12px;background:#28a745;color:#fff;border:none;border-radius:5px;">UPLOAD</button></form></div></body>"""
-
-@app.route("/do_up", methods=["POST"])
-def do_up():
-    if request.form.get("pw") == ADMIN_PASSWORD:
-        f = request.files.get("file"); v = request.form.get("vname", "video").replace(" ","_")
-        if f: cloudinary.uploader.upload(f, resource_type="video", public_id=v)
-        return redirect("/")
-    return "Error"
-
-@app.route("/upload_pdf_page")
-def upload_pdf_page():
-    return """<body style="padding:20px;font-family:sans-serif;text-align:center;background:#f0f0f0;"><div style="background:#fff;padding:20px;border-radius:10px;"><h3>New PDF</h3><form action="/do_pdf_upload" method="POST" enctype="multipart/form-data"><input type="file" name="file" accept=".pdf" style="margin-bottom:15px;"><br><input type="text" name="pdf_name" placeholder="Name" style="width:90%;padding:10px;margin-bottom:10px;"><input type="password" name="pw" placeholder="Pass" style="width:90%;padding:10px;margin-bottom:15px;"><button style="width:100%;padding:12px;background:#e74c3c;color:#fff;border:none;border-radius:5px;">PROCESS</button></form></div></body>"""
-
-@app.route("/do_pdf_upload", methods=["POST"])
-def do_pdf_upload():
-    if request.form.get("pw") == ADMIN_PASSWORD:
-        f = request.files.get("file"); n = request.form.get("pdf_name").replace(" ","_")
-        if f:
-            pdf_path = f"temp_{int(time.time())}.pdf"
-            f.save(pdf_path)
-            threading.Thread(target=process_pdf_background, args=(pdf_path, n)).start()
-            return redirect("/pdf_home")
-    return "Error"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

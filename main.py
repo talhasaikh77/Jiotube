@@ -32,35 +32,25 @@ def index():
     q = request.args.get("q", "").strip().lower()
     next_c = request.args.get("next")
     try:
-        res = cloudinary.api.resources(resource_type="video", type="upload", max_results=10, next_cursor=next_c)
+        res = cloudinary.api.resources(resource_type="video", type="upload", max_results=20, next_cursor=next_c)
         videos = [v for v in res.get("resources", []) if q in v.get("public_id", "").lower()]
         new_c = res.get("next_cursor")
     except: videos = []; new_c = None
     v_cards = ""
     for v in videos:
         thumb = v["secure_url"].rsplit(".", 1)[0] + ".jpg"
-        v_cards += f"""<div style="background:#fff;margin-bottom:20px;border-radius:12px;overflow:hidden;box-shadow:0 4px 8px rgba(0,0,0,0.1);"><img src="{thumb}" style="width:100%;"><div style="padding:12px;"><b>{v["public_id"]}</b><div style="display:flex;gap:5px;margin-top:10px;"><a href="{v["secure_url"]}" style="flex:2;background:#0078d7;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:8px;">PLAY</a><a href="/modify?task=rename&pid={v["public_id"]}" style="flex:1;background:orange;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:8px;font-size:11px;">NAME</a><a href="/modify?task=delete&pid={v["public_id"]}" style="flex:1;background:red;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:8px;font-size:11px;">DEL</a></div></div></div>"""
+        v_cards += f"""<div style="background:#fff;margin-bottom:20px;border-radius:12px;overflow:hidden;box-shadow:0 4px 8px rgba(0,0,0,0.1);"><img src="{thumb}" style="width:100%;"><div style="padding:12px;"><b>{v["public_id"]}</b><div style="display:flex;gap:5px;margin-top:10px;"><a href="{v["secure_url"]}" style="flex:2;background:#0078d7;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:8px;">PLAY</a><a href="/modify?task=rename&pid={v["public_id"]}&type=video" style="flex:1;background:orange;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:8px;font-size:11px;">NAME</a><a href="/modify?task=delete&pid={v["public_id"]}&type=video" style="flex:1;background:red;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:8px;font-size:11px;">DEL</a></div></div></div>"""
     next_btn = f"""<a href="/?next={new_c}&q={q}" style="display:block;background:#333;color:#fff;text-align:center;padding:15px;text-decoration:none;border-radius:10px;">LOAD MORE ↓</a>""" if new_c else ""
-    return f"""<body style="background:#f4f7f6;font-family:sans-serif;margin:0;"><div style="background:#fff;padding:15px;text-align:center;border-bottom:3px solid #0078d7;position:sticky;top:0;z-index:1000;"><h2>JioTube Pro</h2><div style="display:flex;gap:8px;"><a href="/admin_upload" style="flex:1;background:#28a745;color:#fff;padding:10px;text-decoration:none;border-radius:6px;">+ VIDEO</a><a href="/pdf_home" style="flex:1;background:#e74c3c;color:#fff;padding:10px;text-decoration:none;border-radius:6px;">PDF VIEWER</a></div></div><div style="padding:12px;">{v_cards} {next_btn}</div></body>"""
-
-@app.route("/admin_upload")
-def admin_upload():
-    return """<body style="text-align:center;padding:25px;font-family:sans-serif;background:#f0f4f5;"><div style="background:#fff;padding:25px;border-radius:20px;max-width:400px;margin:auto;"><h3>Upload Video</h3><form id="uF"><input type="file" id="fI" accept="video/*" style="margin-bottom:20px;"><br><input type="text" id="vN" placeholder="Video Name" style="width:90%;padding:10px;margin-bottom:10px;"><input type="password" id="pw" placeholder="Pass" style="width:90%;padding:10px;margin-bottom:20px;"><div id="pW" style="display:none;margin-bottom:20px;"><div style="width:100%;background:#eee;height:15px;border-radius:10px;overflow:hidden;"><div id="pB" style="width:0%;background:#28a745;height:100%;"></div></div><p id="sT" style="font-size:12px;">0%</p></div><button type="button" onclick="upL()" id="uB" style="width:100%;padding:15px;background:#28a745;color:#fff;border:none;border-radius:10px;">START UPLOAD</button></form></div><script>function upL(){var f=document.getElementById("fI").files[0],n=document.getElementById("vN").value,p=document.getElementById("pw").value;if(!f||!n||!p)return alert("Fill all!");var d=new FormData();d.append("file",f);d.append("vname",n);d.append("pw",p);var x=new XMLHttpRequest();x.upload.addEventListener("progress",function(e){if(e.lengthComputable){var pc=Math.round((e.loaded/e.total)*100);document.getElementById("pW").style.display="block";document.getElementById("pB").style.width=pc+"%";document.getElementById("sT").innerText="Uploading: "+pc+"%";document.getElementById("uB").disabled=true;}});x.onreadystatechange=function(){if(x.readyState==4&&x.status==200){window.location.href="/"}};x.open("POST","/do_up",true);x.send(d);}</script></body>"""
-
-@app.route("/do_up", methods=["POST"])
-def do_up():
-    if request.form.get("pw") == ADMIN_PASSWORD:
-        f = request.files.get("file")
-        v = request.form.get("vname", "video").replace(" ","_")
-        if f: cloudinary.uploader.upload(f, resource_type="video", public_id=v)
-    return "OK"
+    return f"""<body style="background:#f4f7f6;font-family:sans-serif;margin:0;"><div style="background:#fff;padding:15px;text-align:center;border-bottom:3px solid #0078d7;position:sticky;top:0;z-index:1000;"><h2>JioTube Pro</h2><div style="display:flex;gap:8px;"><a href="/admin_upload" style="flex:1;background:#28a745;color:#fff;padding:10px;text-decoration:none;border-radius:6px;">+ VIDEO</a><a href="/pdf_home" style="flex:1;background:#e74c3c;color:#fff;padding:10px;text-decoration:none;border-radius:6px;">PDF VIEWER</a></div><form action="/" method="GET" style="margin-top:12px;display:flex;gap:5px;"><input type="text" name="q" placeholder="Search videos..." style="flex:1;padding:10px;border-radius:5px;border:1px solid #ddd;" value="{q}"><button style="background:#0078d7;color:#fff;border:none;padding:10px 15px;border-radius:5px;">OK</button></form></div><div style="padding:12px;">{v_cards} {next_btn}</div></body>"""
 
 @app.route("/pdf_home")
 def pdf_home():
+    q = request.args.get("q", "").strip().lower()
     try: folders = cloudinary.api.subfolders("pdf_data")["folders"]
     except: folders = []
-    f_list = "".join([f"""<div style="background:#fff;margin-bottom:12px;padding:15px;border-radius:10px;display:flex;justify-content:space-between;border-left:6px solid #e74c3c;"><a href="/view_pdf?name={f["name"]}" style="text-decoration:none;color:#333;font-weight:bold;">{f["name"].upper()}</a><a href="/pdf_delete?name={f["name"]}" style="color:red;text-decoration:none;font-size:12px;">DEL</a></div>""" for f in folders])
-    return f"""<body style="background:#f9f9f9;font-family:sans-serif;padding:20px;"><h2 style="text-align:center;color:#e74c3c;">PDF Archive</h2><a href="/upload_pdf_page" style="display:block;background:#000;color:#fff;padding:18px;text-align:center;text-decoration:none;border-radius:12px;">+ NEW PDF</a><br>{f_list}</body>"""
+    filtered = [f for f in folders if q in f["name"].lower()]
+    f_list = "".join([f"""<div style="background:#fff;margin-bottom:12px;padding:15px;border-radius:10px;border-left:6px solid #e74c3c;box-shadow:0 2px 5px rgba(0,0,0,0.1);"><div style="display:flex;justify-content:space-between;align-items:center;"><a href="/view_pdf?name={f["name"]}" style="text-decoration:none;color:#333;font-weight:bold;font-size:16px;">{f["name"].upper()}</a><div style="display:flex;gap:5px;"><a href="/modify?task=rename&pid={f["name"]}&type=pdf" style="background:orange;color:#fff;padding:5px 8px;text-decoration:none;border-radius:4px;font-size:10px;">RENAME</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" style="background:red;color:#fff;padding:5px 8px;text-decoration:none;border-radius:4px;font-size:10px;">DEL</a></div></div></div>""" for f in filtered])
+    return f"""<body style="background:#f9f9f9;font-family:sans-serif;padding:0;"><div style="background:#fff;padding:15px;text-align:center;border-bottom:3px solid #e74c3c;position:sticky;top:0;z-index:1000;"><h2>PDF Archive</h2><div style="display:flex;gap:8px;"><a href="/" style="flex:1;background:#333;color:#fff;padding:10px;text-decoration:none;border-radius:6px;">BACK</a><a href="/upload_pdf_page" style="flex:1;background:#e74c3c;color:#fff;padding:10px;text-decoration:none;border-radius:6px;">+ NEW PDF</a></div><form action="/pdf_home" method="GET" style="margin-top:12px;display:flex;gap:5px;"><input type="text" name="q" placeholder="Search PDF..." style="flex:1;padding:10px;border-radius:5px;border:1px solid #ddd;" value="{q}"><button style="background:#e74c3c;color:#fff;border:none;padding:10px 15px;border-radius:5px;">OK</button></form></div><div style="padding:15px;">{f_list}</div></body>"""
 
 @app.route("/upload_pdf_page")
 def upload_pdf_page():
@@ -69,15 +59,13 @@ def upload_pdf_page():
 @app.route("/do_pdf_upload", methods=["POST"])
 def do_pdf_upload():
     if request.form.get("pw") == ADMIN_PASSWORD:
-        f = request.files.get("file")
-        n = request.form.get("pdf_name").replace(" ","_")
+        f = request.files.get("file"); n = request.form.get("pdf_name").replace(" ","_")
         if f: process_pdf_fast(f, n)
     return "OK"
 
 @app.route("/view_pdf")
 def view_pdf():
-    name = request.args.get("name")
-    c = request.args.get("next")
+    name = request.args.get("name"); c = request.args.get("next")
     res = cloudinary.api.resources_by_tag(name, max_results=10, next_cursor=c)
     pages = sorted(res["resources"], key=lambda x: x["public_id"])
     nc = res.get("next_cursor")
@@ -85,23 +73,43 @@ def view_pdf():
     nb = f"""<a href="/view_pdf?name={name}&next={nc}" style="display:block;background:#e74c3c;color:#fff;padding:15px;text-align:center;text-decoration:none;border-radius:10px;">NEXT 10 PAGES →</a>""" if nc else ""
     return f"""<body style="background:#111;margin:0;"><div style="background:#fff;padding:10px;text-align:center;position:sticky;top:0;display:flex;justify-content:space-between;"><a href="/pdf_home">← BACK</a><b>{name.upper()}</b><span></span></div>{h}{nb}</body>"""
 
+@app.route("/admin_upload")
+def admin_upload():
+    return """<body style="text-align:center;padding:25px;font-family:sans-serif;background:#f0f4f5;"><div style="background:#fff;padding:25px;border-radius:20px;max-width:400px;margin:auto;"><h3>Upload Video</h3><form id="uF"><input type="file" id="fI" accept="video/*" style="margin-bottom:20px;"><br><input type="text" id="vN" placeholder="Video Name" style="width:90%;padding:10px;margin-bottom:10px;"><input type="password" id="pw" placeholder="Pass" style="width:90%;padding:10px;margin-bottom:20px;"><div id="pW" style="display:none;margin-bottom:20px;"><div style="width:100%;background:#eee;height:15px;border-radius:10px;overflow:hidden;"><div id="pB" style="width:0%;background:#28a745;height:100%;"></div></div><p id="sT" style="font-size:12px;">0%</p></div><button type="button" onclick="upL()" id="uB" style="width:100%;padding:15px;background:#28a745;color:#fff;border:none;border-radius:10px;">START UPLOAD</button></form></div><script>function upL(){var f=document.getElementById("fI").files[0],n=document.getElementById("vN").value,p=document.getElementById("pw").value;if(!f||!n||!p)return alert("Fill all!");var d=new FormData();d.append("file",f);d.append("vname",n);d.append("pw",p);var x=new XMLHttpRequest();x.upload.addEventListener("progress",function(e){if(e.lengthComputable){var pc=Math.round((e.loaded/e.total)*100);document.getElementById("pW").style.display="block";document.getElementById("pB").style.width=pc+"%";document.getElementById("sT").innerText="Uploading: "+pc+"%";document.getElementById("uB").disabled=true;}});x.onreadystatechange=function(){if(x.readyState==4&&x.status==200){window.location.href="/"}};x.open("POST","/do_up",true);x.send(d);}</script></body>"""
+
+@app.route("/do_up", methods=["POST"])
+def do_up():
+    if request.form.get("pw") == ADMIN_PASSWORD:
+        f = request.files.get("file"); v = request.form.get("vname", "video").replace(" ","_")
+        if f: cloudinary.uploader.upload(f, resource_type="video", public_id=v)
+    return "OK"
+
 @app.route("/modify")
 def modify():
-    t = request.args.get("task"); p = request.args.get("pid")
-    return render_template_string("""<form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}">{% if t=="rename" %}<input type="text" name="new"><br>{% endif %}<input type="password" name="pw"><button>OK</button></form>""", t=t, p=p)
+    t = request.args.get("task"); p = request.args.get("pid"); tp = request.args.get("type")
+    return render_template_string("""<body style="text-align:center;padding:40px;font-family:sans-serif;"><h3>{{t.upper()}} ({{tp.upper()}})</h3><p>{{p}}</p><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{% if t=="rename" %}<input type="text" name="new" placeholder="New Name" style="padding:10px;width:80%;"><br><br>{% endif %}<input type="password" name="pw" placeholder="Admin Pass" style="padding:10px;width:80%;"><br><br><button style="padding:10px 30px;">CONFIRM</button></form></body>""", t=t, p=p, tp=tp)
 
 @app.route("/confirm", methods=["POST"])
 def confirm():
     if request.form.get("pw") == ADMIN_PASSWORD:
-        t = request.form.get("task"); p = request.form.get("pid")
-        if t == "rename": cloudinary.uploader.rename(p, request.form.get("new").replace(" ","_"), resource_type="video")
-        elif t == "delete": cloudinary.uploader.destroy(p, resource_type="video")
-    return redirect("/")
-
-@app.route("/pdf_delete")
-def pdf_delete():
-    cloudinary.api.delete_resources_by_tag(request.args.get("name"))
-    return redirect("/pdf_home")
+        t = request.form.get("task"); p = request.form.get("pid"); tp = request.form.get("type")
+        if tp == "video":
+            if t == "rename": cloudinary.uploader.rename(p, request.form.get("new").replace(" ","_"), resource_type="video")
+            elif t == "delete": cloudinary.uploader.destroy(p, resource_type="video")
+            return redirect("/")
+        else:
+            if t == "rename": # PDF Folder rename (tag based)
+                new_n = request.form.get("new").replace(" ","_")
+                res = cloudinary.api.resources_by_tag(p)
+                for r in res["resources"]:
+                    old_id = r["public_id"]
+                    new_id = old_id.replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/")
+                    cloudinary.uploader.rename(old_id, new_id)
+                    cloudinary.uploader.add_tag(new_n, new_id)
+                    cloudinary.uploader.remove_tag(p, new_id)
+            elif t == "delete": cloudinary.api.delete_resources_by_tag(p)
+            return redirect("/pdf_home")
+    return "Error"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

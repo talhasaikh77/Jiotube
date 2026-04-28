@@ -1,6 +1,4 @@
-Flask
-cloudinary
+flask
 requests
-gunicorn
-beautifulsoup4
-beautifulsoup4
+cloudinary
+PyMuPDF

@@ -18,10 +18,11 @@ def process_pdf_fast(file, pdf_name):
         doc = fitz.open(pdf_path)
         for i in range(len(doc)):
             page = doc.load_page(i)
-            pix = page.get_pixmap(matrix=fitz.Matrix(1.2, 1.2))
+            # Normal quality par save kar rahe hain taaki Cloudinary ko mehnat na karni pade
+            pix = page.get_pixmap(matrix=fitz.Matrix(1.1, 1.1))
             img_path = f"p{i+1}_{pdf_name}.jpg"
             pix.save(img_path)
-            cloudinary.uploader.upload(img_path, public_id=f"p{i+1}", folder=f"pdf_data/{pdf_name}", tags=[pdf_name, "pdf_page"], resource_type="image")
+            cloudinary.uploader.upload(img_path, public_id=f"p{i+1}", folder=f"pdf_data/{pdf_name}", resource_type="image")
             if os.path.exists(img_path): os.remove(img_path)
         doc.close()
         os.remove(pdf_path)
@@ -52,17 +53,14 @@ def pdf_home():
 @app.route("/view_pdf")
 def view_pdf():
     name = request.args.get("name"); c = request.args.get("next")
+    ts = int(time.time())
     try:
         res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{name}/", max_results=10, next_cursor=c)
         pages = sorted(res.get("resources", []), key=lambda x: x["public_id"])
         nc = res.get("next_cursor")
     except: pages = []; nc = None
-    # Black screen fix: f_auto, q_auto aur version timestamp add kiya hai
-    ts = int(time.time())
-    h = ""
-    for p in pages:
-        opt_url = p["secure_url"].replace("/upload/", f"/upload/f_auto,q_auto/v{ts}/")
-        h += f"""<div style="margin-bottom:15px;background:#000;text-align:center;"><img src="{opt_url}" style="width:100%;min-height:200px;display:block;"><div style="padding:10px;"><a href="{p["secure_url"].replace("/upload/","/upload/fl_attachment/")}" style="color:#fff;text-decoration:none;font-size:12px;background:#28a745;padding:5px 10px;border-radius:4px;">DOWNLOAD HQ</a></div></div>"""
+    # No transformations, direct secure_url with version tag
+    h = "".join([f"""<div style="margin-bottom:15px;background:#fff;text-align:center;"><img src="{p["secure_url"]}?v={ts}" style="width:100%;display:block;background:#eee;"><div style="padding:10px;"><a href="{p["secure_url"].replace("/upload/","/upload/fl_attachment/")}" style="color:#fff;text-decoration:none;font-size:12px;background:#28a745;padding:5px 10px;border-radius:4px;">DOWNLOAD HQ</a></div></div>""" for p in pages])
     return f"""<body style="background:#111;margin:0;"><div style="background:#fff;padding:10px;text-align:center;position:sticky;top:0;display:flex;justify-content:space-between;z-index:1000;"><a href="/pdf_home" style="text-decoration:none;color:#e74c3c;">← BACK</a><b>{name.upper()}</b><span></span></div>{h}{f"<a href=\"/view_pdf?name="+name+"&next="+nc+"\" style=\"display:block;background:#e74c3c;color:#fff;padding:15px;text-align:center;text-decoration:none;\">NEXT 10 PAGES →</a>" if nc else ""}</body>"""
 
 @app.route("/modify")
@@ -83,9 +81,7 @@ def confirm():
                 new_n = request.form.get("new").replace(" ","_")
                 res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{p}/")
                 for r in res.get("resources", []):
-                    old_id = r["public_id"]
-                    new_id = old_id.replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/")
-                    cloudinary.uploader.rename(old_id, new_id)
+                    cloudinary.uploader.rename(r["public_id"], r["public_id"].replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/"))
             elif t == "delete":
                 res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{p}/")
                 ids = [r["public_id"] for r in res.get("resources", [])]
@@ -93,26 +89,26 @@ def confirm():
             return redirect("/pdf_home")
     return "Wrong Password"
 
+@app.route("/do_pdf_upload", methods=["POST"])
+def do_pdf_upload():
+    if request.form.get("pw") == ADMIN_PASSWORD:
+        f = request.files.get("file"); n = request.form.get("pdf_name").replace(" ","_")
+        if f: process_pdf_fast(f, n)
+    return "OK"
+
+@app.route("/upload_pdf_page")
+def upload_pdf_page():
+    return """<body style="text-align:center;padding:25px;font-family:sans-serif;background:#f0f4f5;"><div style="background:#fff;padding:25px;border-radius:20px;max-width:400px;margin:auto;"><h3>Upload PDF</h3><form id="uF"><input type="file" id="fI" accept=".pdf" style="margin-bottom:20px;"><br><input type="text" id="pN" placeholder="PDF Name" style="width:90%;padding:10px;margin-bottom:10px;"><input type="password" id="pw" placeholder="Pass" style="width:90%;padding:10px;margin-bottom:20px;"><button type="button" onclick="upL()" id="uB" style="width:100%;padding:15px;background:#0078d7;color:#fff;border:none;border-radius:10px;">START UPLOAD</button></form></div><script>function upL(){var f=document.getElementById("fI").files[0],n=document.getElementById("pN").value,p=document.getElementById("pw").value;if(!f||!n||!p)return alert("Fill all!");var d=new FormData();d.append("file",f);d.append("pdf_name",n);d.append("pw",p);var x=new XMLHttpRequest();x.onreadystatechange=function(){if(x.readyState==4&&x.status==200){window.location.href="/pdf_home"}};x.open("POST","/do_pdf_upload",true);x.send(d);}</script></body>"""
+
 @app.route("/admin_upload")
 def admin_upload():
-    return """<body style="text-align:center;padding:25px;font-family:sans-serif;background:#f0f4f5;"><div style="background:#fff;padding:25px;border-radius:20px;max-width:400px;margin:auto;"><h3>Upload Video</h3><form id="uF"><input type="file" id="fI" accept="video/*" style="margin-bottom:20px;"><br><input type="text" id="vN" placeholder="Video Name" style="width:90%;padding:10px;margin-bottom:10px;"><input type="password" id="pw" placeholder="Pass" style="width:90%;padding:10px;margin-bottom:20px;"><div id="pW" style="display:none;margin-bottom:20px;"><div style="width:100%;background:#eee;height:15px;border-radius:10px;overflow:hidden;"><div id="pB" style="width:0%;background:#28a745;height:100%;"></div></div><p id="sT" style="font-size:12px;">0%</p></div><button type="button" onclick="upL()" id="uB" style="width:100%;padding:15px;background:#28a745;color:#fff;border:none;border-radius:10px;">START UPLOAD</button></form></div><script>function upL(){var f=document.getElementById("fI").files[0],n=document.getElementById("vN").value,p=document.getElementById("pw").value;if(!f||!n||!p)return alert("Fill all!");var d=new FormData();d.append("file",f);d.append("vname",n);d.append("pw",p);var x=new XMLHttpRequest();x.upload.addEventListener("progress",function(e){if(e.lengthComputable){var pc=Math.round((e.loaded/e.total)*100);document.getElementById("pW").style.display="block";document.getElementById("pB").style.width=pc+"%";document.getElementById("sT").innerText="Uploading: "+pc+"%";document.getElementById("uB").disabled=true;}});x.onreadystatechange=function(){if(x.readyState==4&&x.status==200){window.location.href="/"}};x.open("POST","/do_up",true);x.send(d);}</script></body>"""
+    return """<body style="text-align:center;padding:25px;font-family:sans-serif;background:#f0f4f5;"><div style="background:#fff;padding:25px;border-radius:20px;max-width:400px;margin:auto;"><h3>Upload Video</h3><form id="uF"><input type="file" id="fI" accept="video/*" style="margin-bottom:20px;"><br><input type="text" id="vN" placeholder="Video Name" style="width:90%;padding:10px;margin-bottom:10px;"><input type="password" id="pw" placeholder="Pass" style="width:90%;padding:10px;margin-bottom:20px;"><button type="button" onclick="upL()" id="uB" style="width:100%;padding:15px;background:#28a745;color:#fff;border:none;border-radius:10px;">START UPLOAD</button></form></div><script>function upL(){var f=document.getElementById("fI").files[0],n=document.getElementById("vN").value,p=document.getElementById("pw").value;if(!f||!n||!p)return alert("Fill all!");var d=new FormData();d.append("file",f);d.append("vname",n);d.append("pw",p);var x=new XMLHttpRequest();x.onreadystatechange=function(){if(x.readyState==4&&x.status==200){window.location.href="/"}};x.open("POST","/do_up",true);x.send(d);}</script></body>"""
 
 @app.route("/do_up", methods=["POST"])
 def do_up():
     if request.form.get("pw") == ADMIN_PASSWORD:
         f = request.files.get("file"); v = request.form.get("vname", "video").replace(" ","_")
         if f: cloudinary.uploader.upload(f, resource_type="video", public_id=v)
-    return "OK"
-
-@app.route("/upload_pdf_page")
-def upload_pdf_page():
-    return """<body style="text-align:center;padding:25px;font-family:sans-serif;background:#f0f4f5;"><div style="background:#fff;padding:25px;border-radius:20px;max-width:400px;margin:auto;"><h3>Upload PDF</h3><form id="uF"><input type="file" id="fI" accept=".pdf" style="margin-bottom:20px;"><br><input type="text" id="pN" placeholder="PDF Name" style="width:90%;padding:10px;margin-bottom:10px;"><input type="password" id="pw" placeholder="Pass" style="width:90%;padding:10px;margin-bottom:20px;"><div id="pW" style="display:none;margin-bottom:20px;"><div style="width:100%;background:#eee;height:15px;border-radius:10px;overflow:hidden;"><div id="pB" style="width:0%;background:#0078d7;height:100%;"></div></div><p id="sT" style="font-size:12px;">0%</p></div><button type="button" onclick="upL()" id="uB" style="width:100%;padding:15px;background:#0078d7;color:#fff;border:none;border-radius:10px;">START UPLOAD</button></form></div><script>function upL(){var f=document.getElementById("fI").files[0],n=document.getElementById("pN").value,p=document.getElementById("pw").value;if(!f||!n||!p)return alert("Fill all!");var d=new FormData();d.append("file",f);d.append("pdf_name",n);d.append("pw",p);var x=new XMLHttpRequest();x.upload.addEventListener("progress",function(e){if(e.lengthComputable){var pc=Math.round((e.loaded/e.total)*100);document.getElementById("pW").style.display="block";document.getElementById("pB").style.width=pc+"%";document.getElementById("sT").innerText="Uploading: "+pc+"%";document.getElementById("uB").disabled=true;}});x.onreadystatechange=function(){if(x.readyState==4&&x.status==200){document.getElementById("sT").innerText="Processing... Please wait!";setTimeout(function(){window.location.href="/pdf_home"},5000)}};x.open("POST","/do_pdf_upload",true);x.send(d);}</script></body>"""
-
-@app.route("/do_pdf_upload", methods=["POST"])
-def do_pdf_upload():
-    if request.form.get("pw") == ADMIN_PASSWORD:
-        f = request.files.get("file"); n = request.form.get("pdf_name").replace(" ","_")
-        if f: process_pdf_fast(f, n)
     return "OK"
 
 if __name__ == "__main__":

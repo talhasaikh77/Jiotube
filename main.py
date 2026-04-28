@@ -66,7 +66,7 @@ def do_pdf_upload():
 @app.route("/view_pdf")
 def view_pdf():
     name = request.args.get("name"); c = request.args.get("next")
-    res = cloudinary.api.resources_by_tag(name, max_results=10, next_cursor=c)
+    res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{name}/", max_results=10, next_cursor=c)
     pages = sorted(res["resources"], key=lambda x: x["public_id"])
     nc = res.get("next_cursor")
     h = "".join([f"""<div style="margin-bottom:20px;background:#fff;"><img src="{p["secure_url"]}" style="width:100%;"><div style="padding:10px;text-align:center;background:#eee;"><a href="{p["secure_url"].replace("/upload/","/upload/fl_attachment/")}" style="background:#28a745;color:#fff;padding:8px;text-decoration:none;border-radius:5px;">DOWNLOAD HQ</a></div></div>""" for p in pages])

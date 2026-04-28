@@ -17,11 +17,9 @@ def process_pdf_fast(file, pdf_name):
         doc = fitz.open(pdf_path)
         for i in range(len(doc)):
             page = doc.load_page(i)
-            # Quality 1.2 rakhi hai taaki loading fast ho aur black screen na aaye
             pix = page.get_pixmap(matrix=fitz.Matrix(1.2, 1.2))
             img_path = f"p{i+1}_{pdf_name}.jpg"
             pix.save(img_path)
-            # Tags yahan "pdf_name" ke roop mein add ho rahe hain
             cloudinary.uploader.upload(img_path, public_id=f"p{i+1}", folder=f"pdf_data/{pdf_name}", tags=[pdf_name, "pdf_page"], resource_type="image")
             if os.path.exists(img_path): os.remove(img_path)
         doc.close()
@@ -41,7 +39,7 @@ def index():
     v_cards = ""
     for v in videos:
         thumb = v["secure_url"].rsplit(".", 1)[0] + ".jpg"
-        v_cards += f"""<div style="background:#fff;margin-bottom:20px;border-radius:12px;overflow:hidden;box-shadow:0 4px 8px rgba(0,0,0,0.1);"><img src="{thumb}" style="width:100%;"><div style="padding:12px;"><b>{v["public_id"]}</b><div style="display:flex;gap:5px;margin-top:10px;"><a href="{v["secure_url"]}" style="flex:2;background:#0078d7;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:8px;">PLAY</a><a href="/modify?task=rename&pid={v["public_id"]}&type=video" style="flex:1;background:orange;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:8px;font-size:11px;">NAME</a><a href="/modify?task=delete&pid={v["public_id"]}&type=video" style="flex:1;background:red;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:8px;font-size:11px;">DEL</a></div></div></div>"""
+        v_cards += f"""<div style="background:#fff;margin-bottom:20px;border-radius:12px;overflow:hidden;box-shadow:0 4px 8px rgba(0,0,0,0.1);"><img src="{thumb}" style="width:100%;" loading="lazy"><div style="padding:12px;"><b>{v["public_id"]}</b><div style="display:flex;gap:5px;margin-top:10px;"><a href="{v["secure_url"]}" style="flex:2;background:#0078d7;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:8px;">PLAY</a><a href="/modify?task=rename&pid={v["public_id"]}&type=video" style="flex:1;background:orange;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:8px;font-size:11px;">NAME</a><a href="/modify?task=delete&pid={v["public_id"]}&type=video" style="flex:1;background:red;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:8px;font-size:11px;">DEL</a></div></div></div>"""
     next_btn = f"""<a href="/?next={new_c}&q={q}" style="display:block;background:#333;color:#fff;text-align:center;padding:15px;text-decoration:none;border-radius:10px;">LOAD MORE ↓</a>""" if new_c else ""
     return f"""<body style="background:#f4f7f6;font-family:sans-serif;margin:0;"><div style="background:#fff;padding:15px;text-align:center;border-bottom:3px solid #0078d7;position:sticky;top:0;z-index:1000;"><h2>JioTube Pro</h2><div style="display:flex;gap:8px;"><a href="/admin_upload" style="flex:1;background:#28a745;color:#fff;padding:10px;text-decoration:none;border-radius:6px;">+ VIDEO</a><a href="/pdf_home" style="flex:1;background:#e74c3c;color:#fff;padding:10px;text-decoration:none;border-radius:6px;">PDF VIEWER</a></div><form action="/" method="GET" style="margin-top:12px;display:flex;gap:5px;"><input type="text" name="q" placeholder="Search..." style="flex:1;padding:10px;" value="{q}"><button style="background:#0078d7;color:#fff;border:none;padding:10px 15px;">OK</button></form></div><div style="padding:12px;">{v_cards} {next_btn}</div></body>"""
 
@@ -57,13 +55,14 @@ def pdf_home():
 @app.route("/view_pdf")
 def view_pdf():
     name = request.args.get("name"); c = request.args.get("next")
-    # Tags check karne ke liye resources_by_tag hi use kar raha hoon
-    res = cloudinary.api.resources_by_tag(name, max_results=10, next_cursor=c)
-    pages = sorted(res["resources"], key=lambda x: x["public_id"])
-    nc = res.get("next_cursor")
-    h = "".join([f"""<div style="margin-bottom:20px;background:#fff;"><img src="{p["secure_url"]}" style="width:100%;"><div style="padding:10px;text-align:center;background:#eee;"><a href="{p["secure_url"].replace("/upload/","/upload/fl_attachment/")}" style="background:#28a745;color:#fff;padding:8px;text-decoration:none;border-radius:5px;">DOWNLOAD HQ</a></div></div>""" for p in pages])
+    try:
+        res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{name}/", max_results=10, next_cursor=c)
+        pages = sorted(res.get("resources", []), key=lambda x: x["public_id"])
+        nc = res.get("next_cursor")
+    except: pages = []; nc = None
+    h = "".join([f"""<div style="margin-bottom:20px;background:#000;min-height:300px;"><img src="{p["secure_url"]}" style="width:100%;" loading="lazy"><div style="padding:10px;text-align:center;background:#222;"><a href="{p["secure_url"].replace("/upload/","/upload/fl_attachment/")}" style="background:#28a745;color:#fff;padding:8px;text-decoration:none;border-radius:5px;font-size:12px;">DOWNLOAD HQ</a></div></div>""" for p in pages])
     nb = f"""<a href="/view_pdf?name={name}&next={nc}" style="display:block;background:#e74c3c;color:#fff;padding:15px;text-align:center;text-decoration:none;border-radius:10px;">NEXT 10 PAGES →</a>""" if nc else ""
-    return f"""<body style="background:#111;margin:0;"><div style="background:#fff;padding:10px;text-align:center;position:sticky;top:0;display:flex;justify-content:space-between;"><a href="/pdf_home">← BACK</a><b>{name.upper()}</b><span></span></div>{h}{nb}</body>"""
+    return f"""<body style="background:#111;margin:0;"><div style="background:#fff;padding:10px;text-align:center;position:sticky;top:0;display:flex;justify-content:space-between;z-index:1000;"><a href="/pdf_home" style="text-decoration:none;color:#e74c3c;font-weight:bold;">← BACK</a><b style="font-size:14px;">{name.upper()}</b><span></span></div>{h}{nb}</body>"""
 
 @app.route("/do_pdf_upload", methods=["POST"])
 def do_pdf_upload():
@@ -74,7 +73,7 @@ def do_pdf_upload():
 
 @app.route("/upload_pdf_page")
 def upload_pdf_page():
-    return """<body style="text-align:center;padding:25px;font-family:sans-serif;background:#f0f4f5;"><div style="background:#fff;padding:25px;border-radius:20px;max-width:400px;margin:auto;"><h3>Upload PDF</h3><form id="uF"><input type="file" id="fI" accept=".pdf" style="margin-bottom:20px;"><br><input type="text" id="pN" placeholder="PDF Name" style="width:90%;padding:10px;margin-bottom:10px;"><input type="password" id="pw" placeholder="Pass" style="width:90%;padding:10px;margin-bottom:20px;"><div id="pW" style="display:none;margin-bottom:20px;"><div style="width:100%;background:#eee;height:15px;border-radius:10px;overflow:hidden;"><div id="pB" style="width:0%;background:#0078d7;height:100%;"></div></div><p id="sT" style="font-size:12px;">0%</p></div><button type="button" onclick="upL()" id="uB" style="width:100%;padding:15px;background:#0078d7;color:#fff;border:none;border-radius:10px;">START UPLOAD</button></form></div><script>function upL(){var f=document.getElementById("fI").files[0],n=document.getElementById("pN").value,p=document.getElementById("pw").value;if(!f||!n||!p)return alert("Fill all!");var d=new FormData();d.append("file",f);d.append("pdf_name",n);d.append("pw",p);var x=new XMLHttpRequest();x.upload.addEventListener("progress",function(e){if(e.lengthComputable){var pc=Math.round((e.loaded/e.total)*100);document.getElementById("pW").style.display="block";document.getElementById("pB").style.width=pc+"%";document.getElementById("sT").innerText="Uploading: "+pc+"%";document.getElementById("uB").disabled=true;}});x.onreadystatechange=function(){if(x.readyState==4&&x.status==200){document.getElementById("sT").innerText="Processing PDF...";setTimeout(function(){window.location.href="/pdf_home"},3000)}};x.open("POST","/do_pdf_upload",true);x.send(d);}</script></body>"""
+    return """<body style="text-align:center;padding:25px;font-family:sans-serif;background:#f0f4f5;"><div style="background:#fff;padding:25px;border-radius:20px;max-width:400px;margin:auto;"><h3>Upload PDF</h3><form id="uF"><input type="file" id="fI" accept=".pdf" style="margin-bottom:20px;"><br><input type="text" id="pN" placeholder="PDF Name" style="width:90%;padding:10px;margin-bottom:10px;"><input type="password" id="pw" placeholder="Pass" style="width:90%;padding:10px;margin-bottom:20px;"><div id="pW" style="display:none;margin-bottom:20px;"><div style="width:100%;background:#eee;height:15px;border-radius:10px;overflow:hidden;"><div id="pB" style="width:0%;background:#0078d7;height:100%;"></div></div><p id="sT" style="font-size:12px;">0%</p></div><button type="button" onclick="upL()" id="uB" style="width:100%;padding:15px;background:#0078d7;color:#fff;border:none;border-radius:10px;">START UPLOAD</button></form></div><script>function upL(){var f=document.getElementById("fI").files[0],n=document.getElementById("pN").value,p=document.getElementById("pw").value;if(!f||!n||!p)return alert("Fill all!");var d=new FormData();d.append("file",f);d.append("pdf_name",n);d.append("pw",p);var x=new XMLHttpRequest();x.upload.addEventListener("progress",function(e){if(e.lengthComputable){var pc=Math.round((e.loaded/e.total)*100);document.getElementById("pW").style.display="block";document.getElementById("pB").style.width=pc+"%";document.getElementById("sT").innerText="Uploading: "+pc+"%";document.getElementById("uB").disabled=true;}});x.onreadystatechange=function(){if(x.readyState==4&&x.status==200){document.getElementById("sT").innerText="Processing... Wait!";setTimeout(function(){window.location.href="/pdf_home"},3000)}};x.open("POST","/do_pdf_upload",true);x.send(d);}</script></body>"""
 
 @app.route("/admin_upload")
 def admin_upload():
@@ -103,13 +102,15 @@ def confirm():
         else:
             if t == "rename":
                 new_n = request.form.get("new").replace(" ","_")
-                res = cloudinary.api.resources_by_tag(p)
-                for r in res["resources"]:
+                res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{p}/")
+                for r in res.get("resources", []):
                     old_id = r["public_id"]
-                    new_id = old_id.replace(f"p", f"p") # ID structure change nahi hogi, sirf folder aur tag badlega
-                    cloudinary.uploader.add_tag(new_n, old_id)
-                    cloudinary.uploader.remove_tag(p, old_id)
-            elif t == "delete": cloudinary.api.delete_resources_by_tag(p)
+                    new_id = old_id.replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/")
+                    cloudinary.uploader.rename(old_id, new_id)
+            elif t == "delete":
+                res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{p}/")
+                ids = [r["public_id"] for r in res.get("resources", [])]
+                if ids: cloudinary.api.delete_resources(ids)
             return redirect("/pdf_home")
     return "Error"
 

@@ -1,123 +1,149 @@
 import os
+import fitz  # PyMuPDF
 import requests
-from flask import Flask, request, redirect, Response, render_template_string
 import cloudinary
-import cloudinary.api
 import cloudinary.uploader
-from urllib.parse import urljoin, urlparse
+import cloudinary.api
+from flask import Flask, request, redirect, render_template_string, Response
 
 app = Flask(__name__)
 
-# --- Config ---
+# --- Cloudinary Config ---
 cloudinary.config(cloud_name="dawterffe", api_key="258318685843824", api_secret="NxTNXBeLmupMQ0S1FOPU9t6bcjo", secure=True)
 ADMIN_PASSWORD = "809047"
 
-# --- SMART PROXY ENGINE (Next/Prev Support) ---
-def proxy_engine_pro(content, target_url):
-    parsed = urlparse(target_url)
-    base = f"{parsed.scheme}://{parsed.netloc}"
-    
-    # Har link aur form ko proxy route par bhejna
-    content = content.replace('href="/', f'href="/proxy_go?u={base}/')
-    content = content.replace('src="/', f'src="/proxy_go?u={base}/')
-    content = content.replace('action="/', f'action="/proxy_go?u={base}/')
-    content = content.replace('href="https://', 'href="/proxy_go?u=https://')
-    content = content.replace('href="http://', 'href="/proxy_go?u=http://')
+# --- PDF TO JPG LOGIC ---
+def process_pdf_to_jpg(file, pdf_name):
+    pdf_path = f"temp_{pdf_name}.pdf"
+    file.save(pdf_path)
+    doc = fitz.open(pdf_path)
+    for i in range(len(doc)):
+        page = doc.load_page(i)
+        # Quality ke liye zoom factor 3 rakha hai (High Resolution)
+        pix = page.get_pixmap(matrix=fitz.Matrix(3, 3))
+        img_path = f"{pdf_name}_p{i+1}.jpg"
+        pix.save(img_path)
+        cloudinary.uploader.upload(img_path, 
+                                 public_id=f"pdf_data/{pdf_name}/p{i+1}",
+                                 tags=[pdf_name, "pdf_page"])
+        os.remove(img_path)
+    doc.close()
+    os.remove(pdf_path)
 
-    nav = f'''<div style="background:#000;padding:12px;text-align:center;border-bottom:3px solid red;position:sticky;top:0;z-index:999;">
-                <a href="/proxy_page" style="color:#fff;text-decoration:none;font-weight:bold;">[ EXIT PROXY ]</a>
-              </div>'''
-    return nav + content
-
-@app.route('/proxy_page')
-def proxy_page():
-    return '''
-    <body style="background:#111;color:#fff;text-align:center;font-family:sans-serif;padding:30px;">
-        <h2 style="color:red;">GitHub Proxy Pro</h2>
-        <form action="/proxy_go" method="GET">
-            <input type="text" name="u" placeholder="https://mbasic.facebook.com" style="width:85%;padding:15px;border-radius:10px;"><br><br>
-            <button style="width:90%;padding:15px;background:red;color:#fff;border:none;border-radius:10px;font-weight:bold;">OPEN SITE</button>
-        </form>
-        <div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <a href="/proxy_go?u=https://mbasic.facebook.com" style="background:#222;padding:15px;color:#fff;text-decoration:none;border-radius:10px;">Facebook</a>
-            <a href="/proxy_go?u=https://www.google.com" style="background:#222;padding:15px;color:#fff;text-decoration:none;border-radius:10px;">Google</a>
-        </div>
-        <br><a href="/" style="color:#555;">← JioTube Home</a>
-    </body>
-    '''
-
-@app.route('/proxy_go')
-def proxy_go():
-    u = request.args.get('u')
-    if not u: return redirect('/proxy_page')
-    if not u.startswith('http'): u = 'https://' + u
-    headers = {"User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"}
-    try:
-        r = requests.get(u, headers=headers, timeout=20, allow_redirects=True)
-        if "text/html" in r.headers.get("Content-Type", ""):
-            return Response(proxy_engine_pro(r.text, u), mimetype="text/html")
-        return Response(r.content, mimetype=r.headers.get("Content-Type"))
-    except: return redirect('/proxy_page')
-
-# --- JIOTUBE HOME (Search + Next/Prev + Modify Buttons) ---
+# --- HOME PAGE (VIDEOS + SEARCH) ---
 @app.route('/')
 def index():
     q = request.args.get('q', '').strip().lower()
-    next_cursor = request.args.get('next')
-    
+    next_c = request.args.get('next')
     try:
-        # Search aur Pagination ke saath fetch karna
-        res = cloudinary.api.resources(resource_type="video", type="upload", max_results=10, next_cursor=next_cursor)
-        all_v = res.get('resources', [])
-        videos = [v for v in all_v if q in v.get('public_id', '').lower()]
-        new_cursor = res.get('next_cursor')
-    except: 
-        videos = []; new_cursor = None
+        res = cloudinary.api.resources(resource_type="video", type="upload", max_results=10, next_cursor=next_c)
+        videos = [v for v in res.get('resources', []) if q in v.get('public_id', '').lower()]
+        new_c = res.get('next_cursor')
+    except: videos = []; new_c = None
 
     v_cards = "".join([f'''
-        <div style="background:#fff;margin-bottom:20px;border-radius:10px;overflow:hidden;box-shadow:0 2px 5px rgba(0,0,0,0.1);">
-            <img src="{v['secure_url'].rsplit('.', 1)[0] + '.jpg'}" style="width:100%;">
-            <div style="padding:15px;">
-                <b style="display:block;margin-bottom:10px;">{v['public_id']}</b>
-                <a href="{v['secure_url']}" style="display:block;background:#0078d7;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:5px;font-weight:bold;margin-bottom:10px;">PLAY</a>
-                <div style="display:flex;gap:5px;">
-                    <a href="/modify?task=rename&pid={v['public_id']}" style="flex:1;background:#f39c12;color:#fff;text-align:center;padding:8px;text-decoration:none;border-radius:4px;font-size:12px;">RENAME</a>
-                    <a href="/modify?task=delete&pid={v['public_id']}" style="flex:1;background:#e74c3c;color:#fff;text-align:center;padding:8px;text-decoration:none;border-radius:4px;font-size:12px;">DELETE</a>
-                </div>
+        <div style="background:#fff;margin-bottom:15px;border-radius:10px;padding:10px;box-shadow:0 2px 5px #ccc;">
+            <b style="font-size:14px;">{v['public_id']}</b><br><br>
+            <a href="{v['secure_url']}" style="display:block;background:#0078d7;color:#fff;text-align:center;padding:10px;text-decoration:none;border-radius:5px;font-weight:bold;">PLAY VIDEO</a>
+            <div style="display:flex;gap:5px;margin-top:10px;">
+                <a href="/modify?task=rename&pid={v['public_id']}" style="flex:1;background:orange;color:#fff;text-align:center;padding:5px;text-decoration:none;border-radius:3px;font-size:11px;">RENAME</a>
+                <a href="/modify?task=delete&pid={v['public_id']}" style="flex:1;background:red;color:#fff;text-align:center;padding:5px;text-decoration:none;border-radius:3px;font-size:11px;">DELETE</a>
             </div>
         </div>
     ''' for v in videos])
 
-    # Next Button ka logic
-    next_btn = f'<a href="/?next={new_cursor}&q={q}" style="display:block;background:#333;color:#fff;text-align:center;padding:15px;text-decoration:none;border-radius:10px;margin-top:10px;">NEXT PAGE →</a>' if new_cursor else ""
+    next_btn = f'<a href="/?next={new_c}&q={q}" style="display:block;background:#333;color:#fff;text-align:center;padding:12px;text-decoration:none;border-radius:8px;">NEXT VIDEOS →</a>' if new_c else ""
 
     return f'''
-    <body style="background:#f4f4f4;margin:0;font-family:sans-serif;padding-bottom:50px;">
+    <body style="background:#f4f4f4;font-family:sans-serif;margin:0;padding-bottom:50px;">
         <div style="background:#fff;padding:15px;text-align:center;border-bottom:3px solid #0078d7;position:sticky;top:0;z-index:100;">
             <h2 style="margin:0;color:#0078d7;">JioTube Pro</h2>
             <div style="margin-top:10px;display:flex;gap:5px;">
-                <a href="/admin_upload" style="flex:1;background:#28a745;color:#fff;padding:10px;text-decoration:none;border-radius:5px;font-size:13px;">UPLOAD</a>
-                <a href="/proxy_page" style="flex:1;background:red;color:#fff;padding:10px;text-decoration:none;border-radius:5px;font-size:13px;">PROXY</a>
+                <a href="/admin_upload" style="flex:1;background:#28a745;color:#fff;padding:10px;text-decoration:none;border-radius:5px;font-size:12px;">+ VIDEO</a>
+                <a href="/pdf_home" style="flex:1;background:#e74c3c;color:#fff;padding:10px;text-decoration:none;border-radius:5px;font-size:12px;">PDF VIEWER</a>
             </div>
-            <form action="/" method="GET" style="margin-top:10px;display:flex;gap:5px;">
-                <input type="text" name="q" placeholder="Search Videos..." style="flex:1;padding:10px;border:1px solid #ddd;border-radius:5px;" value="{q}">
-                <button type="submit" style="background:#0078d7;color:#fff;border:none;padding:10px 15px;border-radius:5px;">OK</button>
+            <form action="/" method="GET" style="margin-top:10px;display:flex;">
+                <input type="text" name="q" placeholder="Search..." style="flex:1;padding:8px;border:1px solid #ddd;" value="{q}">
+                <button style="background:#0078d7;color:#fff;border:none;padding:8px 15px;">OK</button>
             </form>
         </div>
-        <div style="padding:10px;">
-            {v_cards}
-            {next_btn}
-            <br><center><a href="/" style="color:#888;text-decoration:none;font-size:12px;">BACK TO FIRST PAGE</a></center>
-        </div>
+        <div style="padding:10px;">{v_cards} {next_btn}</div>
     </body>
     '''
 
-# --- Admin & Modify Routes ---
+# --- PDF HOME (LIST & UPLOAD) ---
+@app.route('/pdf_home')
+def pdf_home():
+    try: folders = cloudinary.api.subfolders("pdf_data")['folders']
+    except: folders = []
+    
+    f_list = "".join([f'''
+        <div style="background:#fff;margin-bottom:10px;padding:15px;border-radius:8px;box-shadow:0 1px 3px #ccc;display:flex;justify-content:space-between;">
+            <a href="/view_pdf?name={f['name']}" style="text-decoration:none;color:#333;font-weight:bold;">{f['name']}</a>
+            <a href="/pdf_delete?name={f['name']}" style="color:red;text-decoration:none;font-size:12px;">Delete</a>
+        </div>
+    ''' for f in folders])
+
+    return f'''
+    <body style="background:#f9f9f9;font-family:sans-serif;padding:15px;">
+        <h2 style="text-align:center;color:#e74c3c;">PDF Archive</h2>
+        <a href="/upload_pdf_page" style="display:block;background:#000;color:#fff;padding:15px;text-align:center;text-decoration:none;border-radius:10px;font-weight:bold;">+ UPLOAD NEW PDF</a>
+        <br>{f_list}
+        <br><center><a href="/" style="color:#666;">← Home</a></center>
+    </body>
+    '''
+
+@app.route('/upload_pdf_page')
+def upload_pdf_page():
+    return '<form action="/do_pdf_upload" method="POST" enctype="multipart/form-data" style="text-align:center;padding:50px;"><input type="file" name="file" accept=".pdf"><br><br><input type="text" name="pdf_name" placeholder="PDF Name"><br><br><input type="password" name="pw" placeholder="Admin Pass"><br><br><button>START CONVERTING</button></form>'
+
+@app.route('/do_pdf_upload', methods=['POST'])
+def do_pdf_upload():
+    if request.form.get('pw') == ADMIN_PASSWORD:
+        file = request.files.get('file'); p_name = request.form.get('pdf_name').replace(' ','_')
+        if file: process_pdf_to_jpg(file, p_name)
+    return redirect('/pdf_home')
+
+# --- PDF VIEWING (10 PAGES + HIGH QUALITY DOWNLOAD) ---
+@app.route('/view_pdf')
+def view_pdf():
+    name = request.args.get('name'); cursor = request.args.get('next')
+    res = cloudinary.api.resources_by_tag(name, max_results=10, next_cursor=cursor)
+    pages = sorted(res['resources'], key=lambda x: x['public_id'])
+    new_c = res.get('next_cursor')
+
+    img_html = ""
+    for i, p in enumerate(pages):
+        # High Quality Download link: fl_attachment flag ensures it downloads
+        download_url = p['secure_url'].replace("/upload/", "/upload/fl_attachment/")
+        img_html += f'''
+        <div style="background:#fff;margin-bottom:20px;border-bottom:5px solid #e74c3c;">
+            <img src="{p['secure_url']}" style="width:100%;display:block;">
+            <div style="padding:10px;display:flex;justify-content:space-between;align-items:center;background:#eee;">
+                <span style="font-weight:bold;">PAGE {i+1}</span>
+                <a href="{download_url}" style="background:#28a745;color:#fff;padding:8px 15px;text-decoration:none;border-radius:5px;font-size:12px;font-weight:bold;">DOWNLOAD HQ</a>
+            </div>
+        </div>
+        '''
+    
+    next_btn = f'<a href="/view_pdf?name={name}&next={new_c}" style="display:block;background:#e74c3c;color:#fff;padding:15px;text-align:center;text-decoration:none;font-weight:bold;margin:10px;border-radius:10px;">NEXT 10 PAGES →</a>' if new_c else ""
+
+    return f'''
+    <body style="background:#1a1a1a;margin:0;font-family:sans-serif;">
+        <div style="background:#fff;padding:10px;text-align:center;position:sticky;top:0;z-index:100;">
+            <b>{name.upper()}</b> | <a href="/pdf_home" style="color:red;text-decoration:none;">EXIT</a>
+        </div>
+        {img_html} {next_btn}
+        <div style="padding:20px;text-align:center;"><a href="/pdf_home" style="color:#fff;">Back to List</a></div>
+    </body>
+    '''
+
+# --- ADMIN ROUTES (Videos) ---
 @app.route('/admin_upload', methods=['GET', 'POST'])
 def admin_upload():
     if request.method == 'POST' and request.form.get('pw') == ADMIN_PASSWORD:
-        return '<form action="/do_up" method="POST" enctype="multipart/form-data" style="padding:20px;text-align:center;"><input type="file" name="file"><br><br><input type="text" name="vname" placeholder="Video Name"><br><br><button>UPLOAD NOW</button></form>'
-    return '<form method="POST" style="padding:20px;text-align:center;"><input type="password" name="pw" placeholder="Admin Pass"><br><br><button>LOGIN</button></form>'
+        return '<form action="/do_up" method="POST" enctype="multipart/form-data"><input type="file" name="file"><input type="text" name="vname"><button>Up</button></form>'
+    return '<form method="POST"><input type="password" name="pw"><button>Login</button></form>'
 
 @app.route('/do_up', methods=['POST'])
 def do_up():
@@ -127,26 +153,22 @@ def do_up():
 
 @app.route('/modify')
 def modify():
-    task = request.args.get('task'); pid = request.args.get('pid')
-    return render_template_string('''
-        <form action="/confirm" method="POST" style="padding:40px;text-align:center;font-family:sans-serif;">
-            <h2 style="color:red;">{{task.upper()}}</h2>
-            <p>Video: {{pid}}</p>
-            <input type="hidden" name="pid" value="{{pid}}">
-            <input type="hidden" name="task" value="{{task}}">
-            {% if task=="rename" %}<input type="text" name="new_name" placeholder="Enter New Name" style="padding:10px;width:80%;"><br><br>{% endif %}
-            <input type="password" name="pw" placeholder="Admin Password" style="padding:10px;width:80%;"><br><br>
-            <button type="submit" style="padding:10px 30px;background:#000;color:#fff;border:none;border-radius:5px;">CONFIRM ACTION</button>
-        </form>
-    ''', task=task, pid=pid)
+    t = request.args.get('task'); p = request.args.get('pid')
+    return render_template_string('<form action="/confirm" method="POST" style="padding:30px;text-align:center;"><h3>{{t.upper()}}</h3><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}">{% if t=="rename" %}<input type="text" name="new" placeholder="New Name"><br><br>{% endif %}<input type="password" name="pw" placeholder="Pass"><br><br><button>OK</button></form>', t=t, p=p)
 
 @app.route('/confirm', methods=['POST'])
 def confirm():
     if request.form.get('pw') == ADMIN_PASSWORD:
         t = request.form.get('task'); p = request.form.get('pid')
-        if t == 'rename': cloudinary.uploader.rename(p, request.form.get('new_name').replace(' ','_'), resource_type="video")
+        if t == 'rename': cloudinary.uploader.rename(p, request.form.get('new').replace(' ','_'), resource_type="video")
         elif t == 'delete': cloudinary.uploader.destroy(p, resource_type="video")
     return redirect('/')
+
+@app.route('/pdf_delete')
+def pdf_delete():
+    name = request.args.get('name')
+    cloudinary.api.delete_resources_by_tag(name)
+    return redirect('/pdf_home')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

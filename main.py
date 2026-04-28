@@ -138,7 +138,6 @@ def do_pdf_upload():
             return "OK"
     return "Wrong Password", 403
 
-# Reuse confirm/view_pdf/modify from previous version
 @app.route("/view_pdf")
 def view_pdf():
     name = request.args.get("name")
@@ -149,7 +148,15 @@ def view_pdf():
         pages = sorted(res.get("resources", []), key=lambda x: x["public_id"])
         new_c = res.get("next_cursor")
     except: pages = []; new_c = None
-    h = "".join([f"""<div style="background:#000;margin-bottom:15px;text-align:center;border-bottom:3px solid #e74c3c;"><img src="{p["secure_url"]}?v={ts}" style="width:100%;display:block;"><div style="padding:10px;background:#333;"><a href="{p["secure_url"].replace("/upload/","/upload/fl_attachment/")}" style="background:#28a745;color:#fff;font-size:11px;text-decoration:none;padding:8px 20px;border-radius:5px;font-weight:bold;">DOWNLOAD PAGE</a></div></div>""" for p in pages])
+    
+    # Fix: Now downloads as High Quality JPG instead of PDF
+    h = "".join([f"""<div style="background:#000;margin-bottom:15px;text-align:center;border-bottom:3px solid #e74c3c;">
+        <img src="{p["secure_url"]}?v={ts}" style="width:100%;display:block;">
+        <div style="padding:10px;background:#333;">
+            <a href="{p["secure_url"].replace("/upload/","/upload/fl_attachment/").rsplit(".", 1)[0]}.jpg" style="background:#28a745;color:#fff;font-size:11px;text-decoration:none;padding:8px 20px;border-radius:5px;font-weight:bold;">DOWNLOAD PAGE (JPG)</a>
+        </div>
+    </div>""" for p in pages])
+    
     return f"""<body style="margin:0;background:#111;"><div style="background:#fff;padding:10px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid #e74c3c;"><a href="/pdf_home" style="text-decoration:none;font-size:13px;color:#e74c3c;font-weight:bold;">← BACK</a><b style="font-size:12px;color:#333;">{name[:15].upper()}</b><span></span></div>{h} {f"<a href='/view_pdf?name="+name+"&next="+new_c+"' style='display:block;background:#e74c3c;color:#fff;padding:18px;text-align:center;text-decoration:none;font-weight:bold;font-size:14px;border-radius:5px;margin:10px;'>NEXT 10 PAGES →</a>" if new_c else ""}</body>"""
 
 @app.route("/modify")

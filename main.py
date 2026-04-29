@@ -19,36 +19,38 @@ def process_pdf_background(pdf_path, pdf_name):
         for i in range(len(doc)):
             page = doc.load_page(i)
             
-            # --- AUTO-CROP LOGIC (White margin hatane ke liye) ---
-            text_rects = page.search_for(" ") # Dummy search to trigger text detection
-            text_bbox = page.get_textbox_rects() # Get rect of all text
-
+            # --- AUTO-CROP LOGIC ---
+            text_bbox = page.get_textbox_rects()
             if text_bbox:
-                # Agar text mil jaye, toh page ko text ke gird crop karein (with 10px padding)
                 union_rect = fitz.Rect()
                 for rect in text_bbox:
                     union_rect.include_rect(rect)
-                
-                # Halka sa padding (margine) rakhein taaki text cut na jaye
-                union_rect.x0 = max(0, union_rect.x0 - 10)
-                union_rect.y0 = max(0, union_rect.y0 - 10)
-                union_rect.x1 = min(page.rect.width, union_rect.x1 + 10)
-                union_rect.y1 = min(page.rect.height, union_rect.y1 + 10)
-                
+                # Margin safety
+                union_rect.x0 = max(0, union_rect.x0 - 5)
+                union_rect.y0 = max(0, union_rect.y0 - 5)
+                union_rect.x1 = min(page.rect.width, union_rect.x1 + 5)
+                union_rect.y1 = min(page.rect.height, union_rect.y1 + 5)
                 page.set_cropbox(union_rect)
-            # ---------------------------------------------------
 
-            # Jio Bharat ke liye Safe resolution (text-focused, so lower dimension is fine)
-            pix = page.get_pixmap(dpi=200) # Text focused image, 200 DPI is enough
+            # Resolution optimized for faster upload (150 DPI is best for mobile)
+            pix = page.get_pixmap(dpi=150) 
             
-            img_path = f"p{i+1}_{pdf_name}.png"
-            pix.save(img_path)
-            cloudinary.uploader.upload(img_path, public_id=f"p{i+1}", folder=f"pdf_data/{pdf_name}", resource_type="image", quality="auto")
+            img_path = f"p{i+1}_{pdf_name}.jpg" # PNG ki jagah JPG use kar rahe hain taaki file halki ho
+            pix.save(img_path, "jpg")
+            
+            # Upload with retry logic
+            for attempt in range(3):
+                try:
+                    cloudinary.uploader.upload(img_path, public_id=f"p{i+1}", folder=f"pdf_data/{pdf_name}", resource_type="image", quality="auto:good")
+                    break
+                except:
+                    time.sleep(2)
+            
             if os.path.exists(img_path): os.remove(img_path)
         doc.close()
         if os.path.exists(pdf_path): os.remove(pdf_path)
     except Exception as e:
-        print(f"Error during PDF processing: {e}")
+        print(f"Error: {e}")
 
 @app.route("/")
 def index():
@@ -59,7 +61,6 @@ def index():
         videos = [v for v in res.get("resources", []) if q in v.get("public_id", "").lower()]
         new_c = res.get("next_cursor")
     except: videos = []; new_c = None
-    
     v_list = "".join([f"""<div style="background:#fff;border-bottom:2px solid #ddd;padding:5px;margin-bottom:10px;"><img src="{v["secure_url"].rsplit(".", 1)[0]}.jpg" style="width:100%;max-height:150px;object-fit:fill;background:#000;display:block;"><b style="font-size:12px;display:block;padding:5px;color:#333;">{v["public_id"]}</b><div style="display:flex;flex-wrap:wrap;gap:4px;padding:2px;"><a href="{v["secure_url"]}" style="flex:1;background:#0078d7;color:#fff;text-align:center;padding:8px;text-decoration:none;font-size:10px;border-radius:4px;font-weight:bold;">PLAY</a><a href="{v["secure_url"].replace("/upload/","/upload/fl_attachment/")}" style="flex:1;background:#28a745;color:#fff;text-align:center;padding:8px;text-decoration:none;font-size:10px;border-radius:4px;font-weight:bold;">SAVE</a><a href="/modify?task=rename&pid={v["public_id"]}&type=video" style="flex:1;background:orange;color:#fff;text-align:center;padding:8px;text-decoration:none;font-size:10px;border-radius:4px;font-weight:bold;">NAME</a><a href="/modify?task=delete&pid={v["public_id"]}&type=video" style="flex:1;background:red;color:#fff;text-align:center;padding:8px;text-decoration:none;font-size:10px;border-radius:4px;font-weight:bold;">DEL</a></div></div>""" for v in videos])
     next_btn = f"<a href='/?next={new_c}&q={q}' style='display:block;background:#333;color:#fff;text-align:center;padding:15px;text-decoration:none;font-weight:bold;margin:10px;border-radius:5px;'>LOAD NEXT VIDEOS ↓</a>" if new_c else ""
     return f"""<body style="margin:0;font-family:sans-serif;background:#eee;"><div style="background:#0078d7;color:#fff;padding:10px;text-align:center;position:sticky;top:0;z-index:100;"><h3 style="margin:0;">JioTube Pro</h3><div style="display:flex;gap:5px;margin-top:8px;"><a href="/admin_upload" style="flex:1;background:#28a745;color:#fff;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">+ UPLOAD</a><a href="/pdf_home" style="flex:1;background:#e74c3c;color:#fff;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">PDF VIEWER</a></div><form action="/" style="margin-top:8px;display:flex;"><input type="text" name="q" value="{q}" placeholder="Search Videos..." style="flex:1;padding:8px;border:none;border-radius:4px 0 0 4px;"><button style="background:#333;color:#fff;border:none;padding:8px 15px;border-radius:0 4px 4px 0;font-weight:bold;">GO</button></form></div>{v_list if v_list else "<p style='text-align:center;padding:20px;'>No Results Found</p>"}{next_btn}</body>"""
@@ -86,24 +87,23 @@ def view_pdf():
     next_btn = f"<a href='/view_pdf?name={name}&next={new_c}' style='display:block;background:#e74c3c;color:#fff;padding:18px;text-align:center;text-decoration:none;font-weight:bold;font-size:14px;border-radius:5px;margin:10px;'>LOAD NEXT 10 PAGES →</a>" if new_c else ""
     return f"""<body style="margin:0;background:#111;"><div style="background:#fff;padding:10px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid #e74c3c;"><a href="/pdf_home" style="text-decoration:none;font-size:13px;color:#e74c3c;font-weight:bold;">← BACK</a><b style="font-size:12px;color:#333;">{name[:15].upper()}</b><span></span></div>{h}{next_btn}</body>"""
 
-# All other functions remain the same
-def get_upload_template(target_url, title, theme_color):
+@app.route("/admin_upload")
+def admin_upload():
     return render_template_string("""
     <body style="padding:20px;font-family:sans-serif;text-align:center;background:#f0f0f0;">
-        <div style="background:#fff;padding:20px;border-radius:10px;max-width:400px;margin:auto;box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-            <h3 style="color:{{theme_color}};">{{title}}</h3>
+        <div style="background:#fff;padding:20px;border-radius:10px;max-width:400px;margin:auto;">
+            <h3 style="color:#28a745;">Upload Video</h3>
             <form id="uploadForm">
                 <input type="file" name="file" id="fileInput" style="margin-bottom:15px;width:100%;"><br>
-                <input type="text" name="name" id="nameInput" placeholder="Enter Name" style="width:95%;padding:12px;margin-bottom:10px;border:1px solid #ddd;border-radius:5px;">
-                <input type="password" name="pw" id="pwInput" placeholder="Admin Pass" style="width:95%;padding:12px;margin-bottom:15px;border:1px solid #ddd;border-radius:5px;">
+                <input type="text" name="name" id="nameInput" placeholder="Enter Name" style="width:95%;padding:12px;margin-bottom:10px;border:1px solid #ddd;">
+                <input type="password" name="pw" id="pwInput" placeholder="Admin Pass" style="width:95%;padding:12px;margin-bottom:15px;border:1px solid #ddd;">
                 <div id="progressWrapper" style="display:none;margin-bottom:15px;">
-                    <div style="background:#eee;border-radius:10px;overflow:hidden;height:25px;border:1px solid #ccc;position:relative;">
-                        <div id="progressBar" style="width:0%;height:100%;background:{{theme_color}};transition:width 0.2s;"></div>
-                        <small id="percentText" style="position:absolute;width:100%;left:0;top:4px;color:#000;font-weight:bold;">0%</small>
+                    <div style="background:#eee;height:25px;border-radius:10px;overflow:hidden;">
+                        <div id="progressBar" style="width:0%;height:100%;background:#28a745;"></div>
                     </div>
-                    <p id="statusText" style="color:#666;font-size:12px;margin-top:5px;">Uploading...</p>
+                    <p id="statusText">Uploading...</p>
                 </div>
-                <button type="button" onclick="uploadFile()" id="upBtn" style="width:100%;padding:15px;background:{{theme_color}};color:#fff;border:none;border-radius:5px;font-weight:bold;">START UPLOAD</button>
+                <button type="button" onclick="uploadFile()" id="upBtn" style="width:100%;padding:15px;background:#28a745;color:#fff;border:none;border-radius:5px;font-weight:bold;">START UPLOAD</button>
             </form>
         </div>
         <script>
@@ -119,30 +119,72 @@ def get_upload_template(target_url, title, theme_color):
             document.getElementById('progressWrapper').style.display = 'block';
             document.getElementById('upBtn').disabled = true;
             var xhr = new XMLHttpRequest();
-            xhr.open("POST", "{{target_url}}", true);
+            xhr.open("POST", "/do_up", true);
             xhr.upload.onprogress = function(e) {
                 if (e.lengthComputable) {
                     var percent = Math.round((e.loaded / e.total) * 100);
                     document.getElementById('progressBar').style.width = percent + '%';
-                    document.getElementById('percentText').innerText = percent + "%";
                 }
             };
             xhr.onload = function() {
-                if (xhr.status == 200) {
-                    document.getElementById('statusText').innerText = "Process Started! Please wait...";
-                    setTimeout(() => { window.location.href = (window.location.pathname == "/admin_upload") ? "/" : "/pdf_home"; }, 2000);
-                } else { alert("Error: " + xhr.responseText); document.getElementById('upBtn').disabled = false; }
+                if (xhr.status == 200) { location.href="/"; } else { alert("Error!"); }
             };
             xhr.send(formData);
         }
         </script>
     </body>
-    """, title=title, theme_color=theme_color, target_url=target_url)
+    """)
 
-@app.route("/admin_upload")
-def admin_upload(): return get_upload_template("/do_up", "Upload Video", "#28a745")
 @app.route("/upload_pdf_page")
-def upload_pdf_page(): return get_upload_template("/do_pdf_upload", "Upload PDF", "#e74c3c")
+def upload_pdf_page():
+    return render_template_string("""
+    <body style="padding:20px;font-family:sans-serif;text-align:center;background:#f0f0f0;">
+        <div style="background:#fff;padding:20px;border-radius:10px;max-width:400px;margin:auto;">
+            <h3 style="color:#e74c3c;">Upload PDF</h3>
+            <form id="uploadForm">
+                <input type="file" name="file" id="fileInput" style="margin-bottom:15px;width:100%;"><br>
+                <input type="text" name="name" id="nameInput" placeholder="Kitab Ka Naam" style="width:95%;padding:12px;margin-bottom:10px;border:1px solid #ddd;">
+                <input type="password" name="pw" id="pwInput" placeholder="Admin Pass" style="width:95%;padding:12px;margin-bottom:15px;border:1px solid #ddd;">
+                <div id="progressWrapper" style="display:none;margin-bottom:15px;">
+                    <div style="background:#eee;height:25px;border-radius:10px;overflow:hidden;">
+                        <div id="progressBar" style="width:0%;height:100%;background:#e74c3c;"></div>
+                    </div>
+                    <p id="statusText">Uploading PDF to Server...</p>
+                </div>
+                <button type="button" onclick="uploadFile()" id="upBtn" style="width:100%;padding:15px;background:#e74c3c;color:#fff;border:none;border-radius:5px;font-weight:bold;">START UPLOAD</button>
+            </form>
+        </div>
+        <script>
+        function uploadFile() {
+            var file = document.getElementById('fileInput').files[0];
+            var name = document.getElementById('nameInput').value;
+            var pw = document.getElementById('pwInput').value;
+            if(!file || !name || !pw) { alert("Details bhariye!"); return; }
+            var formData = new FormData();
+            formData.append("file", file);
+            formData.append("name", name);
+            formData.append("pw", pw);
+            document.getElementById('progressWrapper').style.display = 'block';
+            document.getElementById('upBtn').disabled = true;
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/do_pdf_upload", true);
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    var percent = Math.round((e.loaded / e.total) * 100);
+                    document.getElementById('progressBar').style.width = percent + '%';
+                }
+            };
+            xhr.onload = function() {
+                if (xhr.status == 200) { 
+                    document.getElementById('statusText').innerText = "PDF Uploaded! Pages are processing in background. You can go back.";
+                    setTimeout(() => { location.href="/pdf_home"; }, 2000);
+                } else { alert("Error!"); }
+            };
+            xhr.send(formData);
+        }
+        </script>
+    </body>
+    """)
 
 @app.route("/do_up", methods=["POST"])
 def do_up():
@@ -150,7 +192,7 @@ def do_up():
         f = request.files.get("file"); v = request.form.get("name", "video").replace(" ","_")
         if f: cloudinary.uploader.upload(f, resource_type="video", public_id=v)
         return "OK"
-    return "Wrong Password", 403
+    return "Error", 403
 
 @app.route("/do_pdf_upload", methods=["POST"])
 def do_pdf_upload():
@@ -161,12 +203,12 @@ def do_pdf_upload():
             f.save(pdf_path)
             threading.Thread(target=process_pdf_background, args=(pdf_path, n)).start()
             return "OK"
-    return "Wrong Password", 403
+    return "Error", 403
 
 @app.route("/modify")
 def modify():
     t = request.args.get("task"); p = request.args.get("pid"); tp = request.args.get("type")
-    return render_template_string("""<body style="text-align:center;padding:25px;font-family:sans-serif;background:#f0f0f0;"><div style="background:#fff;padding:20px;border-radius:10px;"><h4 style="color:#333;">{{t.upper()}}</h4><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{% if t=="rename" %}<input type="text" name="new" placeholder="New Name" style="width:90%;padding:12px;margin-bottom:15px;border:1px solid #ddd;border-radius:5px;"><br>{% endif %}<input type="password" name="pw" placeholder="Pass" style="width:90%;padding:12px;margin-bottom:20px;border:1px solid #ddd;border-radius:5px;"><br><button style="width:100%;padding:15px;background:#333;color:#fff;border:none;border-radius:5px;font-weight:bold;">CONFIRM</button></form></div></body>""", t=t, p=p, tp=tp)
+    return render_template_string("""<body style="text-align:center;padding:25px;font-family:sans-serif;background:#f0f0f0;"><div style="background:#fff;padding:20px;border-radius:10px;"><h4>{{t.upper()}}</h4><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{% if t=="rename" %}<input type="text" name="new" placeholder="New Name" style="width:90%;padding:12px;margin-bottom:15px;border:1px solid #ddd;border-radius:5px;"><br>{% endif %}<input type="password" name="pw" placeholder="Pass" style="width:90%;padding:12px;margin-bottom:20px;border:1px solid #ddd;border-radius:5px;"><br><button style="width:100%;padding:15px;background:#333;color:#fff;border:none;border-radius:5px;font-weight:bold;">CONFIRM</button></form></div></body>""", t=t, p=p, tp=tp)
 
 @app.route("/confirm", methods=["POST"])
 def confirm():
@@ -185,7 +227,7 @@ def confirm():
                 cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/")
                 cloudinary.api.delete_folder(f"pdf_data/{p}")
             return redirect("/pdf_home")
-    return "Wrong Password"
+    return "Error"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

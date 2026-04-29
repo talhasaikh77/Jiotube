@@ -18,14 +18,13 @@ def process_pdf_background(pdf_path, pdf_name):
         doc = fitz.open(pdf_path)
         for i in range(len(doc)):
             page = doc.load_page(i)
-            # 1200px width logic
-            zoom = 1200 / page.rect.width
-            mat = fitz.Matrix(zoom, zoom)
-            pix = page.get_pixmap(matrix=mat)
+            # Jio Bharat aur zooming ke liye High Resolution (300 DPI) set kiya hai
+            pix = page.get_pixmap(dpi=300) 
             
             img_path = f"p{i+1}_{pdf_name}.png"
             pix.save(img_path)
-            cloudinary.uploader.upload(img_path, public_id=f"p{i+1}", folder=f"pdf_data/{pdf_name}", resource_type="image", quality="auto")
+            # Quality "auto" se "best" kar di hai
+            cloudinary.uploader.upload(img_path, public_id=f"p{i+1}", folder=f"pdf_data/{pdf_name}", resource_type="image", quality="auto", fetch_format="auto")
             if os.path.exists(img_path): os.remove(img_path)
         doc.close()
         if os.path.exists(pdf_path): os.remove(pdf_path)

@@ -19,9 +19,9 @@ def process_pdf_background(pdf_path, pdf_name):
         for i in range(len(doc)):
             page = doc.load_page(i)
             
-            # Ultra High Resolution 1900x2000 for Jio Bharat
-            target_w = 1900
-            target_h = 2000
+            # Safe High Resolution for Jio Bharat (1600x1800)
+            target_w = 1600
+            target_h = 1800
             zoom_w = target_w / page.rect.width
             zoom_h = target_h / page.rect.height
             zoom = min(zoom_w, zoom_h)
@@ -31,7 +31,6 @@ def process_pdf_background(pdf_path, pdf_name):
             
             img_path = f"p{i+1}_{pdf_name}.png"
             pix.save(img_path)
-            # Public ID me page number set kiya hai taaki pehchan sakein
             cloudinary.uploader.upload(img_path, public_id=f"p{i+1}", folder=f"pdf_data/{pdf_name}", resource_type="image", quality="auto")
             if os.path.exists(img_path): os.remove(img_path)
         doc.close()
@@ -49,9 +48,7 @@ def index():
     except: videos = []; new_c = None
     
     v_list = "".join([f"""<div style="background:#fff;border-bottom:2px solid #ddd;padding:5px;margin-bottom:10px;"><img src="{v["secure_url"].rsplit(".", 1)[0]}.jpg" style="width:100%;max-height:150px;object-fit:fill;background:#000;display:block;"><b style="font-size:12px;display:block;padding:5px;color:#333;">{v["public_id"]}</b><div style="display:flex;flex-wrap:wrap;gap:4px;padding:2px;"><a href="{v["secure_url"]}" style="flex:1;background:#0078d7;color:#fff;text-align:center;padding:8px;text-decoration:none;font-size:10px;border-radius:4px;font-weight:bold;">PLAY</a><a href="{v["secure_url"].replace("/upload/","/upload/fl_attachment/")}" style="flex:1;background:#28a745;color:#fff;text-align:center;padding:8px;text-decoration:none;font-size:10px;border-radius:4px;font-weight:bold;">SAVE</a><a href="/modify?task=rename&pid={v["public_id"]}&type=video" style="flex:1;background:orange;color:#fff;text-align:center;padding:8px;text-decoration:none;font-size:10px;border-radius:4px;font-weight:bold;">NAME</a><a href="/modify?task=delete&pid={v["public_id"]}&type=video" style="flex:1;background:red;color:#fff;text-align:center;padding:8px;text-decoration:none;font-size:10px;border-radius:4px;font-weight:bold;">DEL</a></div></div>""" for v in videos])
-    
     next_btn = f"<a href='/?next={new_c}&q={q}' style='display:block;background:#333;color:#fff;text-align:center;padding:15px;text-decoration:none;font-weight:bold;margin:10px;border-radius:5px;'>LOAD NEXT VIDEOS ↓</a>" if new_c else ""
-    
     return f"""<body style="margin:0;font-family:sans-serif;background:#eee;"><div style="background:#0078d7;color:#fff;padding:10px;text-align:center;position:sticky;top:0;z-index:100;"><h3 style="margin:0;">JioTube Pro</h3><div style="display:flex;gap:5px;margin-top:8px;"><a href="/admin_upload" style="flex:1;background:#28a745;color:#fff;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">+ UPLOAD</a><a href="/pdf_home" style="flex:1;background:#e74c3c;color:#fff;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">PDF VIEWER</a></div><form action="/" style="margin-top:8px;display:flex;"><input type="text" name="q" value="{q}" placeholder="Search Videos..." style="flex:1;padding:8px;border:none;border-radius:4px 0 0 4px;"><button style="background:#333;color:#fff;border:none;padding:8px 15px;border-radius:0 4px 4px 0;font-weight:bold;">GO</button></form></div>{v_list if v_list else "<p style='text-align:center;padding:20px;'>No Results Found</p>"}{next_btn}</body>"""
 
 @app.route("/pdf_home")
@@ -72,12 +69,8 @@ def view_pdf():
         pages = sorted(res.get("resources", []), key=lambda x: x["public_id"])
         new_c = res.get("next_cursor")
     except: pages = []; new_c = None
-    
-    # Har page number button par dikhayega (P1, P2...)
     h = "".join([f"""<div style="background:#000;margin-bottom:15px;text-align:center;border-bottom:3px solid #e74c3c;"><img src="{p["secure_url"]}?v={ts}" style="width:100%;display:block;"><div style="padding:10px;background:#333;"><a href="{p["secure_url"].rsplit(".", 1)[0]}.jpg" style="background:#28a745;color:#fff;font-size:11px;text-decoration:none;padding:8px 20px;border-radius:5px;font-weight:bold;">DOWNLOAD {p["public_id"].split("/")[-1].upper()}</a></div></div>""" for p in pages])
-    
     next_btn = f"<a href='/view_pdf?name={name}&next={new_c}' style='display:block;background:#e74c3c;color:#fff;padding:18px;text-align:center;text-decoration:none;font-weight:bold;font-size:14px;border-radius:5px;margin:10px;'>LOAD NEXT 10 PAGES →</a>" if new_c else ""
-    
     return f"""<body style="margin:0;background:#111;"><div style="background:#fff;padding:10px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid #e74c3c;"><a href="/pdf_home" style="text-decoration:none;font-size:13px;color:#e74c3c;font-weight:bold;">← BACK</a><b style="font-size:12px;color:#333;">{name[:15].upper()}</b><span></span></div>{h}{next_btn}</body>"""
 
 def get_upload_template(target_url, title, theme_color):

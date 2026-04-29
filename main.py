@@ -19,19 +19,19 @@ def process_pdf_background(pdf_path, pdf_name):
         for i in range(len(doc)):
             page = doc.load_page(i)
             
-            # 1700x1300 Resolution Logic for Jio Bharat
-            # Hum image ko is size mein fit karenge taake quality bani rahe
-            target_w = 1700
-            target_h = 1300
+            # Ultra High Resolution 1900x2000 for Jio Bharat
+            target_w = 1900
+            target_h = 2000
             zoom_w = target_w / page.rect.width
             zoom_h = target_h / page.rect.height
-            zoom = min(zoom_w, zoom_h) # Aspect ratio barkarar rakhne ke liye
+            zoom = min(zoom_w, zoom_h)
             
             mat = fitz.Matrix(zoom, zoom)
             pix = page.get_pixmap(matrix=mat)
             
             img_path = f"p{i+1}_{pdf_name}.png"
             pix.save(img_path)
+            # Public ID me page number set kiya hai taaki pehchan sakein
             cloudinary.uploader.upload(img_path, public_id=f"p{i+1}", folder=f"pdf_data/{pdf_name}", resource_type="image", quality="auto")
             if os.path.exists(img_path): os.remove(img_path)
         doc.close()
@@ -59,7 +59,6 @@ def pdf_home():
     q = request.args.get("q", "").strip().lower()
     try: folders = cloudinary.api.subfolders("pdf_data")["folders"]
     except: folders = []
-    # Search engine aur buttons yahan list mein barkarar hain
     f_list = "".join([f"""<div style="background:#fff;border-bottom:2px solid #ddd;padding:10px;margin-bottom:5px;"><b style="font-size:13px;display:block;color:#e74c3c;margin-bottom:8px;">{f["name"].upper()}</b><div style="display:flex;gap:4px;"><a href="/view_pdf?name={f["name"]}" style="flex:2;background:#e74c3c;color:#fff;padding:10px;text-align:center;text-decoration:none;border-radius:4px;font-size:11px;font-weight:bold;">OPEN PDF</a><a href="/modify?task=rename&pid={f["name"]}&type=pdf" style="flex:1;background:orange;color:#fff;padding:10px;text-align:center;text-decoration:none;border-radius:4px;font-size:11px;font-weight:bold;">NAME</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" style="flex:1;background:red;color:#fff;padding:10px;text-align:center;text-decoration:none;border-radius:4px;font-size:11px;font-weight:bold;">DEL</a></div></div>""" for f in folders if q in f["name"].lower()])
     return f"""<body style="margin:0;font-family:sans-serif;background:#f9f9f9;"><div style="background:#e74c3c;color:#fff;padding:10px;text-align:center;position:sticky;top:0;z-index:100;"><h3 style="margin:0;">PDF Archive</h3><div style="display:flex;gap:5px;margin-top:8px;"><a href="/" style="flex:1;background:#333;color:#fff;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">HOME</a><a href="/upload_pdf_page" style="flex:1;background:#fff;color:#e74c3c;padding:8px;text-decoration:none;font-size:11px;border-radius:4px;font-weight:bold;">+ NEW PDF</a></div><form action="/pdf_home" style="margin-top:8px;display:flex;"><input type="text" name="q" value="{q}" placeholder="Search PDFs..." style="flex:1;padding:8px;border:none;border-radius:4px 0 0 4px;"><button style="background:#333;color:#fff;border:none;padding:8px 15px;border-radius:0 4px 4px 0;font-weight:bold;">GO</button></form></div>{f_list if f_list else "<p style='text-align:center;padding:20px;'>No PDFs Found</p>"}</body>"""
 
@@ -74,14 +73,13 @@ def view_pdf():
         new_c = res.get("next_cursor")
     except: pages = []; new_c = None
     
-    h = "".join([f"""<div style="background:#000;margin-bottom:15px;text-align:center;border-bottom:3px solid #e74c3c;"><img src="{p["secure_url"]}?v={ts}" style="width:100%;display:block;"><div style="padding:10px;background:#333;"><a href="{p["secure_url"].rsplit(".", 1)[0]}.jpg" style="background:#28a745;color:#fff;font-size:11px;text-decoration:none;padding:8px 20px;border-radius:5px;font-weight:bold;">DOWNLOAD JPG</a></div></div>""" for p in pages])
+    # Har page number button par dikhayega (P1, P2...)
+    h = "".join([f"""<div style="background:#000;margin-bottom:15px;text-align:center;border-bottom:3px solid #e74c3c;"><img src="{p["secure_url"]}?v={ts}" style="width:100%;display:block;"><div style="padding:10px;background:#333;"><a href="{p["secure_url"].rsplit(".", 1)[0]}.jpg" style="background:#28a745;color:#fff;font-size:11px;text-decoration:none;padding:8px 20px;border-radius:5px;font-weight:bold;">DOWNLOAD {p["public_id"].split("/")[-1].upper()}</a></div></div>""" for p in pages])
     
-    # Next button apni jagah par
     next_btn = f"<a href='/view_pdf?name={name}&next={new_c}' style='display:block;background:#e74c3c;color:#fff;padding:18px;text-align:center;text-decoration:none;font-weight:bold;font-size:14px;border-radius:5px;margin:10px;'>LOAD NEXT 10 PAGES →</a>" if new_c else ""
     
     return f"""<body style="margin:0;background:#111;"><div style="background:#fff;padding:10px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100;border-bottom:2px solid #e74c3c;"><a href="/pdf_home" style="text-decoration:none;font-size:13px;color:#e74c3c;font-weight:bold;">← BACK</a><b style="font-size:12px;color:#333;">{name[:15].upper()}</b><span></span></div>{h}{next_btn}</body>"""
 
-# Baki saare functions (Upload, Modify, Confirm) same hain
 def get_upload_template(target_url, title, theme_color):
     return render_template_string("""
     <body style="padding:20px;font-family:sans-serif;text-align:center;background:#f0f0f0;">

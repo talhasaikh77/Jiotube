@@ -3,7 +3,7 @@ from flask import Flask, request, redirect, render_template_string, session, url
 from pymongo import MongoClient
 
 app = Flask(__name__)
-app.secret_key = "atif_jio_hotstar_v14"
+app.secret_key = "atif_jio_hotstar_final_v15"
 
 # Database & Cloudinary
 MONGO_URI = "mongodb+srv://talhasaikh77_db_user:AtifAI12345@cluster0.udiyfhu.mongodb.net/Atif_AI_Database?retryWrites=true&w=majority"
@@ -18,7 +18,6 @@ except: print("DB Connection Error")
 ADMIN_PASSWORD = "809047"
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
 
-# JioHotstar Premium Dark Theme
 STYLE = """<style>
     body { margin:0; font-family: sans-serif; background:#0f1014; color:#fff; }
     .header { background: #0f1014; padding:15px; text-align:center; border-bottom: 1px solid #252833; position:sticky; top:0; z-index:1000; }
@@ -66,7 +65,6 @@ def pdf_home():
     q = request.args.get("q", "").strip().lower()
     try: folders = cloudinary.api.subfolders("pdf_data")["folders"]
     except: folders = []
-    # Folder filter taaki khali ya deleted folder na dikhein
     f_list = "".join([f'<div class="card"><div style="padding:15px;"><b>{f["name"].upper()}</b><br><br><div style="display:flex;gap:5px;"><a href="/view_pdf?name={f["name"]}" class="btn btn-dl" style="flex:2;text-align:center;">OPEN BOOK</a><a href="/modify?task=rename&pid={f["name"]}&type=pdf" class="btn btn-ren">NAME</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" class="btn btn-del">DEL</a></div></div></div>' for f in folders if q in f["name"].lower()])
     return f'{STYLE}<div class="header"><h2>PDF Archive</h2><a href="/" class="btn btn-play">← BACK</a><a href="/upload_pdf_page" class="btn btn-dl" style="margin-left:10px;">+ NEW PDF</a></div><form class="search-box"><input name="q" placeholder="Search books..." value="{q}"><button>FIND</button></form>{f_list}'
 
@@ -104,13 +102,13 @@ def ai_login():
         u = users_col.find_one({"m": request.form.get("m")})
         if u and u['p'] == hash_pw(request.form.get("pw")):
             session.permanent = True; session['u'] = str(u['_id']); return redirect(url_for('ai_home'))
-    return f'{STYLE}<body style="display:flex;align-items:center;justify-content:center;height:100vh;"><div class="card" style="width:85%;padding:30px;text-align:center;"><h3>Login AI</h3><form method="POST"><input name="m" placeholder="Mobile"><br><input name="pw" type="password" placeholder="Pass"><br><button class="btn btn-dl" style="width:100%;margin-top:10px;">ENTER</button></form></div></body>'
+    return f'{STYLE}<body style="display:flex;align-items:center;justify-content:center;height:100vh;"><div class="card" style="width:85%;padding:30px;text-align:center;"><h3>Login AI</h3><form method="POST"><input name="m" placeholder="Mobile" style="width:100%;background:#252833;color:#fff;border:none;padding:12px;margin:5px 0;"><br><input name="pw" type="password" placeholder="Pass" style="width:100%;background:#252833;color:#fff;border:none;padding:12px;margin:5px 0;"><br><button class="btn btn-dl" style="width:100%;margin-top:10px;">ENTER</button></form></div></body>'
 
 @app.route("/admin_upload")
-def admin_upload(): return render_template_string(f'{STYLE}<div class="header"><h2>Upload Video</h2></div><form action="/do_up" method="POST" enctype="multipart/form-data" class="card" style="padding:20px;text-align:center;"><input type="file" name="file"><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="Admin Pass"><br><button class="btn btn-dl">UPLOAD</button></form>')
+def admin_upload(): return render_template_string(f'{STYLE}<div class="header"><h2>Upload</h2></div><form action="/do_up" method="POST" enctype="multipart/form-data" class="card" style="padding:20px;text-align:center;"><input type="file" name="file"><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="Pass"><br><button class="btn btn-dl">UPLOAD</button></form>')
 
 @app.route("/upload_pdf_page")
-def upload_pdf_page(): return render_template_string(f'{STYLE}<div class="header"><h2>New PDF</h2></div><form action="/do_pdf_upload" method="POST" enctype="multipart/form-data" class="card" style="padding:20px;text-align:center;"><input type="file" name="file"><br><input name="name" placeholder="Book Name"><br><input name="pw" type="password" placeholder="Admin Pass"><br><button class="btn btn-dl">START</button></form>')
+def upload_pdf_page(): return render_template_string(f'{STYLE}<div class="header"><h2>New PDF</h2></div><form action="/do_pdf_upload" method="POST" enctype="multipart/form-data" class="card" style="padding:20px;text-align:center;"><input type="file" name="file"><br><input name="name" placeholder="Book Name"><br><input name="pw" type="password" placeholder="Pass"><br><button class="btn btn-dl">START</button></form>')
 
 @app.route("/do_up", methods=["POST"])
 def do_up():
@@ -131,7 +129,8 @@ def do_pdf_upload():
 @app.route("/modify")
 def modify():
     t, p, tp = request.args.get("task"), request.args.get("pid"), request.args.get("type")
-    return render_template_string(f'{STYLE}<div class="card" style="padding:25px;text-align:center;"><h3>Confirm Action</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{% if t=="rename" %}<input name="new" placeholder="New Name"><br><br>{% endif %}<input name="pw" type="password" placeholder="Admin Pass"><br><br><button class="btn btn-del">CONFIRM</button></form></div>', t=t, p=p, tp=tp)
+    # Fix Syntax: Double brackets for Jinja in f-string
+    return render_template_string(f'{STYLE}<div class="card" style="padding:25px;text-align:center;"><h3>Confirm Action</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{"<input name=\'new\' placeholder=\'New Name\'><br><br>" if t=="rename" else ""}<input name="pw" type="password" placeholder="Admin Pass"><br><br><button class="btn btn-del">CONFIRM</button></form></div>', t=t, p=p, tp=tp)
 
 @app.route("/confirm", methods=["POST"])
 def confirm():
@@ -148,10 +147,9 @@ def confirm():
                 for r in res.get("resources", []):
                     cloudinary.uploader.rename(r['public_id'], r['public_id'].replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/"))
             elif t == "delete":
-                # Poora folder saaf karne ka sabse fast tareeka
-                cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", resource_type="image", invalidate=True)
-                cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", resource_type="raw", invalidate=True)
-                # Folder ko turant list se hatane ke liye
+                for rt in ["image", "video", "raw"]:
+                    try: cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", resource_type=rt, invalidate=True)
+                    except: pass
                 try: cloudinary.api.delete_folder(f"pdf_data/{p}")
                 except: pass
             return redirect("/pdf_home")

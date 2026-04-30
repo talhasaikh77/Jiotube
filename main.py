@@ -3,7 +3,7 @@ from flask import Flask, request, redirect, render_template_string, session, url
 from pymongo import MongoClient
 
 app = Flask(__name__)
-app.secret_key = "atif_deep_delete_v9"
+app.secret_key = "atif_clean_stable_v10"
 
 # Database & Cloudinary
 MONGO_URI = "mongodb+srv://talhasaikh77_db_user:AtifAI12345@cluster0.udiyfhu.mongodb.net/Atif_AI_Database?retryWrites=true&w=majority"
@@ -102,14 +102,6 @@ def ai_login():
             session.permanent = True; session['u'] = str(u['_id']); return redirect(url_for('ai_home'))
     return f'{STYLE}<body style="background:#1e3c72;display:flex;align-items:center;justify-content:center;height:100vh;"><div class="card" style="width:85%;padding:30px;text-align:center;"><h3>AI Login</h3><form method="POST"><input name="m" placeholder="Mobile"><br><input name="pw" type="password" placeholder="Pass"><br><button class="btn btn-play" style="width:100%;margin-top:10px;">LOGIN</button></form></div></body>'
 
-@app.route("/ai_register", methods=["GET", "POST"])
-def ai_register():
-    if request.method == "POST":
-        m, p = request.form.get("m"), request.form.get("pw")
-        users_col.insert_one({"m": m, "p": hash_pw(p)})
-        return "Done! <a href='/ai_login'>Login</a>"
-    return f'{STYLE}<body style="background:#28a745;padding:50px;"><form method="POST"><input name="m" placeholder="Mobile"><br><input name="pw" placeholder="Pass"><br><button class="btn btn-dl">REGISTER</button></form></body>'
-
 @app.route("/admin_upload")
 def admin_upload(): return render_template_string(f'{STYLE}<div class="header"><h2>Upload Video</h2></div><div class="card" style="padding:20px;text-align:center;"><form action="/do_up" method="POST" enctype="multipart/form-data"><input type="file" name="file"><br><input name="name" placeholder="Name"><br><input name="pw" type="password" placeholder="Pass"><br><button class="btn btn-play">UPLOAD</button></form></div>')
 
@@ -147,11 +139,9 @@ def confirm():
             return redirect("/")
         else:
             if t == "delete":
-                # Deep Delete: Sab types ki files delete karo (image, video, raw)
                 for r_type in ["image", "video", "raw"]:
                     try: cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", resource_type=r_type)
                     except: pass
-                # Ab khali folder delete karo
                 try: cloudinary.api.delete_folder(f"pdf_data/{p}")
                 except: pass
             return redirect("/pdf_home")

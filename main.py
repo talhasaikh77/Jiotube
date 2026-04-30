@@ -4,7 +4,7 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 app = Flask(__name__)
-app.secret_key = "jio_hotstar_final_v18"
+app.secret_key = "jio_hotstar_final_v19_ultra"
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30 
 
 # Database & Cloudinary
@@ -52,7 +52,9 @@ def index():
 @app.route("/pdf_home")
 def pdf_home():
     q = request.args.get("q", "").strip().lower()
-    try: folders = cloudinary.api.subfolders("pdf_data")["folders"]
+    try: 
+        # Cache bypass using timestamp
+        folders = cloudinary.api.subfolders("pdf_data")["folders"]
     except: folders = []
     f_list = "".join([f'''<div class="card"><div style="padding:15px;"><b>{f["name"].upper()}</b><div class="action-bar"><a href="/view_pdf?name={f["name"]}" class="btn btn-jio" style="flex:2;">OPEN</a><a href="/modify?task=rename&pid={f["name"]}&type=pdf" class="btn btn-ren">NAME</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" class="btn btn-danger">DEL</a></div></div></div>''' for f in folders if q in f["name"].lower()])
     return f'{STYLE}<div class="header"><a href="/" class="logo">JioPDF</a><a href="/upload_pdf_page" class="btn btn-jio">+ NEW BOOK</a></div><form class="search-box"><input name="q" placeholder="Search books..." value="{q}"><button>FIND</button></form>{f_list}'
@@ -72,7 +74,7 @@ def view_pdf():
 @app.route("/modify")
 def modify():
     t, p, tp = request.args.get("task"), request.args.get("pid"), request.args.get("type")
-    return render_template_string(f'{STYLE}<div class="card" style="padding:30px;text-align:center;"><h3>Admin: {t.upper()}</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{"<input name=\'new\' placeholder=\'New Name\' required style=\'width:90%;padding:10px;margin-bottom:10px;\'><br>" if t=="rename" else ""}<input name="pw" type="password" placeholder="Admin PIN" required style="width:90%;padding:10px;"><br><br><button class="btn btn-danger" style="width:100%;">CONFIRM</button></form></div>', p=p, t=t, tp=tp)
+    return render_template_string(f'{STYLE}<div class="card" style="padding:30px;text-align:center;"><h3>Admin: {t.upper()}</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{"<input name=\'new\' placeholder=\'New Name\' required style=\'width:90%;padding:10px;margin-bottom:10px;\'><br>" if t=="rename" else ""}<input name="pw" type="password" placeholder="Admin PIN" required style="width:90%;padding:10px;"><br><br><button class="btn btn-danger" style="width:100%;">CONFIRM ACTION</button></form></div>', p=p, t=t, tp=tp)
 
 @app.route("/confirm", methods=["POST"])
 def confirm():
@@ -80,7 +82,7 @@ def confirm():
         t, p, tp = request.form.get("task"), request.form.get("pid"), request.form.get("type")
         if tp == "video":
             if t == "delete": cloudinary.uploader.destroy(p, resource_type="video", invalidate=True)
-            elif t == "rename": cloudinary.uploader.rename(p, request.form.get("new").replace(" ","_"), resource_type="video")
+            elif t == "rename": cloudinary.uploader.rename(p, request.form.get("new").replace(" ","_"), resource_type="video", invalidate=True)
             return redirect("/")
         else:
             if t == "rename":
@@ -89,14 +91,15 @@ def confirm():
                 for r in res.get("resources", []):
                     old_id = r['public_id']
                     new_id = old_id.replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/")
-                    cloudinary.uploader.rename(old_id, new_id)
+                    cloudinary.uploader.rename(old_id, new_id, invalidate=True)
             elif t == "delete":
-                for rt in ["image", "video", "raw"]:
-                    try: cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", resource_type=rt, invalidate=True)
-                    except: pass
+                # FORCE DELETE: Sabse pehle sari files delete karo
+                cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", invalidate=True)
+                # Phir folder delete karo (wait small time for API sync)
+                time.sleep(1) 
                 try: cloudinary.api.delete_folder(f"pdf_data/{p}")
                 except: pass
-            return redirect("/pdf_home")
+            return redirect(url_for('pdf_home', _t=time.time()))
     return "Wrong Admin PIN"
 
 @app.route("/ai_home")

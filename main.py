@@ -4,7 +4,7 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 app = Flask(__name__)
-app.secret_key = "jio_hotstar_final_v19_ultra"
+app.secret_key = "jio_hotstar_final_v20_unique"
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30 
 
 # Database & Cloudinary
@@ -52,11 +52,10 @@ def index():
 @app.route("/pdf_home")
 def pdf_home():
     q = request.args.get("q", "").strip().lower()
-    try: 
-        # Cache bypass using timestamp
-        folders = cloudinary.api.subfolders("pdf_data")["folders"]
+    try: folders = cloudinary.api.subfolders("pdf_data")["folders"]
     except: folders = []
-    f_list = "".join([f'''<div class="card"><div style="padding:15px;"><b>{f["name"].upper()}</b><div class="action-bar"><a href="/view_pdf?name={f["name"]}" class="btn btn-jio" style="flex:2;">OPEN</a><a href="/modify?task=rename&pid={f["name"]}&type=pdf" class="btn btn-ren">NAME</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" class="btn btn-danger">DEL</a></div></div></div>''' for f in folders if q in f["name"].lower()])
+    # Hum display ke liye folder ka asli naam dikhayenge (ID wala part chupa ke)
+    f_list = "".join([f'''<div class="card"><div style="padding:15px;"><b>{f["name"].split('___')[0].upper()}</b><div class="action-bar"><a href="/view_pdf?name={f["name"]}" class="btn btn-jio" style="flex:2;">OPEN</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" class="btn btn-danger">DEL</a></div></div></div>''' for f in folders if q in f["name"].lower()])
     return f'{STYLE}<div class="header"><a href="/" class="logo">JioPDF</a><a href="/upload_pdf_page" class="btn btn-jio">+ NEW BOOK</a></div><form class="search-box"><input name="q" placeholder="Search books..." value="{q}"><button>FIND</button></form>{f_list}'
 
 @app.route("/view_pdf")
@@ -69,12 +68,7 @@ def view_pdf():
     except: pages = []; new_c = None
     h = "".join([f'<div class="card"><img src="{p["secure_url"]}" style="width:100%;"><div class="action-bar"><a href="{p["secure_url"]}" download class="btn btn-jio" style="width:100%;">DOWNLOAD PAGE</a></div></div>' for p in pages])
     nb = f"<a href='/view_pdf?name={name}&next={new_c}' class='btn btn-next'>NEXT 10 PAGES</a>" if new_c else ""
-    return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-outline">← BACK</a><b>{name}</b></div>{h}{nb}'
-
-@app.route("/modify")
-def modify():
-    t, p, tp = request.args.get("task"), request.args.get("pid"), request.args.get("type")
-    return render_template_string(f'{STYLE}<div class="card" style="padding:30px;text-align:center;"><h3>Admin: {t.upper()}</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{"<input name=\'new\' placeholder=\'New Name\' required style=\'width:90%;padding:10px;margin-bottom:10px;\'><br>" if t=="rename" else ""}<input name="pw" type="password" placeholder="Admin PIN" required style="width:90%;padding:10px;"><br><br><button class="btn btn-danger" style="width:100%;">CONFIRM ACTION</button></form></div>', p=p, t=t, tp=tp)
+    return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-outline">← BACK</a><b>{name.split("___")[0]}</b></div>{h}{nb}'
 
 @app.route("/confirm", methods=["POST"])
 def confirm():
@@ -85,23 +79,37 @@ def confirm():
             elif t == "rename": cloudinary.uploader.rename(p, request.form.get("new").replace(" ","_"), resource_type="video", invalidate=True)
             return redirect("/")
         else:
-            if t == "rename":
-                new_n = request.form.get("new").replace(" ","_")
-                res = cloudinary.api.resources(prefix=f"pdf_data/{p}/", max_results=500)
-                for r in res.get("resources", []):
-                    old_id = r['public_id']
-                    new_id = old_id.replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/")
-                    cloudinary.uploader.rename(old_id, new_id, invalidate=True)
-            elif t == "delete":
-                # FORCE DELETE: Sabse pehle sari files delete karo
+            if t == "delete":
                 cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", invalidate=True)
-                # Phir folder delete karo (wait small time for API sync)
-                time.sleep(1) 
+                time.sleep(1)
                 try: cloudinary.api.delete_folder(f"pdf_data/{p}")
                 except: pass
             return redirect(url_for('pdf_home', _t=time.time()))
-    return "Wrong Admin PIN"
+    return "Wrong PIN"
 
+@app.route("/do_pdf_upload", methods=["POST"])
+def do_pdf_upload():
+    if request.form.get("pw") == ADMIN_PASSWORD:
+        f, n = request.files.get("file"), request.form.get("name").replace(" ","_")
+        if f:
+            # UNIQUE FOLDER NAME: Naam + Timestamp taaki cache ka koi chakkar na rahe
+            unique_folder = f"{n}___{int(time.time())}"
+            p_path = f"temp_{int(time.time())}.pdf"; f.save(p_path)
+            def process_pdf(path, folder_name):
+                try:
+                    doc = fitz.open(path)
+                    for i in range(len(doc)):
+                        page = doc.load_page(i)
+                        pix = page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5))
+                        img_path = f"p{i+1}.jpg"; pix.save(img_path)
+                        cloudinary.uploader.upload(img_path, public_id=f"p{i+1}", folder=f"pdf_data/{folder_name}")
+                        os.remove(img_path)
+                    doc.close(); os.remove(path)
+                except: pass
+            threading.Thread(target=process_pdf, args=(p_path, unique_folder)).start()
+    return redirect("/pdf_home")
+
+# --- Baaki saare routes (ai_home, auth, enhance, modify, etc.) pehle wale hi rakhe hain ---
 @app.route("/ai_home")
 def ai_home():
     if 'u' not in session: return redirect(url_for('ai_auth'))
@@ -138,7 +146,7 @@ def ai_del():
 def admin_upload(): return render_template_string(f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><h3>Upload Video</h3><form action="/do_up" method="POST" enctype="multipart/form-data"><input type="file" name="file" required><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>')
 
 @app.route("/upload_pdf_page")
-def upload_pdf_page(): return render_template_string(f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><h3>New PDF</h3><form action="/do_pdf_upload" method="POST" enctype="multipart/form-data"><input type="file" name="file" required><br><input name="name" placeholder="Book Name"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">START</button></form></div>')
+def upload_pdf_page(): return render_template_string(f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-outline">← BACK</a></div><div class="card" style="padding:20px;text-align:center;"><h3>New PDF</h3><form action="/do_pdf_upload" method="POST" enctype="multipart/form-data"><input type="file" name="file" required><br><input name="name" placeholder="Book Name"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">START</button></form></div>')
 
 @app.route("/do_up", methods=["POST"])
 def do_up():
@@ -147,25 +155,10 @@ def do_up():
         if f: cloudinary.uploader.upload(f, resource_type="video", public_id=v)
     return redirect("/")
 
-@app.route("/do_pdf_upload", methods=["POST"])
-def do_pdf_upload():
-    if request.form.get("pw") == ADMIN_PASSWORD:
-        f, n = request.files.get("file"), request.form.get("name").replace(" ","_")
-        if f:
-            p_path = f"temp_{int(time.time())}.pdf"; f.save(p_path)
-            def process_pdf(path, name):
-                try:
-                    doc = fitz.open(path)
-                    for i in range(len(doc)):
-                        page = doc.load_page(i)
-                        pix = page.get_pixmap(matrix=fitz.Matrix(2.5, 2.5))
-                        img_path = f"p{i+1}.jpg"; pix.save(img_path)
-                        cloudinary.uploader.upload(img_path, public_id=f"p{i+1}", folder=f"pdf_data/{name}")
-                        os.remove(img_path)
-                    doc.close(); os.remove(path)
-                except: pass
-            threading.Thread(target=process_pdf, args=(p_path, n)).start()
-    return redirect("/pdf_home")
+@app.route("/modify")
+def modify():
+    t, p, tp = request.args.get("task"), request.args.get("pid"), request.args.get("type")
+    return render_template_string(f'{STYLE}<div class="card" style="padding:30px;text-align:center;"><h3>Admin: {t.upper()}</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{"<input name=\'new\' placeholder=\'New Name\' required style=\'width:90%;padding:10px;margin-bottom:10px;\'><br>" if t=="rename" else ""}<input name="pw" type="password" placeholder="Admin PIN" required style="width:90%;padding:10px;"><br><br><button class="btn btn-danger" style="width:100%;">CONFIRM ACTION</button></form></div>', p=p, t=t, tp=tp)
 
 @app.route("/logout")
 def logout(): session.clear(); return redirect("/")

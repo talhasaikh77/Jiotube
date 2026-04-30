@@ -4,8 +4,7 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 app = Flask(__name__)
-app.secret_key = "jio_hotstar_ultra_v26_final"
-# Session ko 30 din tak save rakhne ke liye
+app.secret_key = "jio_hotstar_ultra_v27_stable"
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30 
 
 MONGO_URI = "mongodb+srv://talhasaikh77_db_user:AtifAI12345@cluster0.udiyfhu.mongodb.net/Atif_AI_Database?retryWrites=true&w=majority"
@@ -20,7 +19,7 @@ except: print("DB Connection Error")
 ADMIN_PASSWORD = "809047"
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
 
-# Background Processing Logic (No Changes)
+# Background Worker for PDF
 def full_bg_pdf(file_path, unique_name):
     try:
         cloudinary.uploader.upload(file_path, resource_type="raw", public_id="source", folder=f"pdf_data/{unique_name}")
@@ -137,11 +136,10 @@ def ai_auth():
         m, p, act = request.form.get("m"), request.form.get("pw"), request.form.get("act")
         if act == "reg":
             if not users_col.find_one({"m": m}): users_col.insert_one({"m": m, "p": hash_pw(p)})
-            return render_template_string(f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><h3>Success!</h3><p>Account Created. Now Login.</p><a href="/ai_auth" class="btn btn-jio">GO TO LOGIN</a></div>')
+            return render_template_string(f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><h3>Success!</h3><p>Account Created.</p><a href="/ai_auth" class="btn btn-jio">LOGIN</a></div>')
         u = users_col.find_one({"m": m})
         if u and u['p'] == hash_pw(p):
-            session.permanent = True
-            session['u'] = str(u['_id'])
+            session.permanent = True; session['u'] = str(u['_id'])
             return redirect(url_for('ai_home'))
     return f'{STYLE}<body style="display:flex;align-items:center;justify-content:center;height:100vh;"><div class="card" style="width:85%;padding:30px;text-align:center;"><h2>JioAI</h2><form method="POST"><input name="m" placeholder="Mobile / Username" required><br><input name="pw" type="password" placeholder="Password" required><br><br><button name="act" value="log" class="btn btn-jio" style="width:48%;">LOGIN</button> <button name="act" value="reg" class="btn btn-outline" style="width:48%;color:#0072ef;border-color:#0072ef;">SIGN UP</button></form></div></body>'
 
@@ -154,7 +152,6 @@ def enhance():
         ai_col.insert_one({"u": session['u'], "url": up['secure_url'], "t": time.time()})
     return redirect(url_for('ai_home'))
 
-# View PDF, Confirm, Modify, Logout (Re-using from V25)
 @app.route("/view_pdf")
 def view_pdf():
     name = request.args.get("name"); next_c = request.args.get("next")
@@ -167,6 +164,7 @@ def view_pdf():
     nb = f"<a href='/view_pdf?name={name}&next={new_c}' class='btn btn-next'>NEXT</a>" if new_c else ""
     return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-outline">← BACK</a><b>{name.split("__")[0]}</b></div>{h}{nb}'
 
+# PDF Rename/Delete Fixing Error
 @app.route("/confirm", methods=["POST"])
 def confirm():
     if request.form.get("pw") == ADMIN_PASSWORD:
@@ -178,14 +176,17 @@ def confirm():
         else:
             if t == "rename":
                 new_n = request.form.get("new").replace(" ","_") + "__" + str(int(time.time()))
-                res = cloudinary.api.resources(prefix=f"pdf_data/{p}/", max_results=500)
+                # Fetching ALL resources to ensure no page is left
+                res = cloudinary.api.resources(prefix=f"pdf_data/{p}/", type="upload", max_results=500)
                 for r in res.get("resources", []):
                     old_id = r['public_id']; new_id = old_id.replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/")
-                    cloudinary.uploader.rename(old_id, new_id, invalidate=True)
+                    cloudinary.uploader.rename(old_id, new_id)
             elif t == "delete":
-                cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", invalidate=True)
-                time.sleep(2); cloudinary.api.delete_folder(f"pdf_data/{p}")
-            return redirect(url_for('pdf_home', _v=time.time()))
+                cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/")
+                time.sleep(1) # Wait for cloud to clear
+                try: cloudinary.api.delete_folder(f"pdf_data/{p}")
+                except: pass
+            return redirect(url_for('pdf_home'))
     return "Wrong PIN"
 
 @app.route("/modify")

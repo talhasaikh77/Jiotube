@@ -4,7 +4,7 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 app = Flask(__name__)
-app.secret_key = "jio_hotstar_ultra_v27_stable"
+app.secret_key = "jio_hotstar_ultra_v28_final_stable"
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30 
 
 MONGO_URI = "mongodb+srv://talhasaikh77_db_user:AtifAI12345@cluster0.udiyfhu.mongodb.net/Atif_AI_Database?retryWrites=true&w=majority"
@@ -19,7 +19,7 @@ except: print("DB Connection Error")
 ADMIN_PASSWORD = "809047"
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
 
-# Background Worker for PDF
+# --- Background Workers ---
 def full_bg_pdf(file_path, unique_name):
     try:
         cloudinary.uploader.upload(file_path, resource_type="raw", public_id="source", folder=f"pdf_data/{unique_name}")
@@ -33,12 +33,28 @@ def full_bg_pdf(file_path, unique_name):
         if os.path.exists(file_path): os.remove(file_path)
     except: pass
 
-def full_bg_video(file_path, v_id):
+def bg_pdf_rename(old_folder, new_folder_name):
     try:
-        cloudinary.uploader.upload(file_path, resource_type="video", public_id=v_id)
-        if os.path.exists(file_path): os.remove(file_path)
+        new_folder_full = f"{new_folder_name}__{int(time.time())}"
+        res = cloudinary.api.resources(prefix=f"pdf_data/{old_folder}/", type="upload", max_results=500)
+        for r in res.get("resources", []):
+            old_id = r['public_id']
+            new_id = old_id.replace(f"pdf_data/{old_folder}", f"pdf_data/{new_folder_full}")
+            cloudinary.uploader.rename(old_id, new_id)
+        # Also move the raw source file
+        try: cloudinary.uploader.rename(f"pdf_data/{old_folder}/source", f"pdf_data/{new_folder_full}/source", resource_type="raw")
+        except: pass
     except: pass
 
+def bg_pdf_delete(folder_name):
+    try:
+        cloudinary.api.delete_resources_by_prefix(f"pdf_data/{folder_name}/")
+        time.sleep(2)
+        try: cloudinary.api.delete_folder(f"pdf_data/{folder_name}")
+        except: pass
+    except: pass
+
+# --- UI Styles ---
 STYLE = """<style>
     :root { --jio-blue: #0072ef; --bg: #0f1014; --card: #16181f; --border: #252833; }
     body { margin:0; font-family: sans-serif; background: var(--bg); color:#fff; }
@@ -51,8 +67,6 @@ STYLE = """<style>
     .search-box { background: var(--border); display:flex; margin:12px; border-radius:8px; overflow:hidden; border: 1px solid #333; }
     .search-box input { flex:1; border:none; padding:12px; outline:none; background:transparent; color:#fff; }
     .search-box button { background: var(--jio-blue); color:#fff; border:none; padding:0 20px; }
-    .thumb { width:100%; height:200px; object-fit:cover; background:#000; }
-    .action-bar { display:flex; gap:5px; padding:10px; flex-wrap: wrap; }
     input[type="text"], input[type="password"], input[type="file"] { width:90%; padding:12px; margin:8px 0; border-radius:6px; border:1px solid var(--border); background:#1c1e26; color:#fff; }
     #progress-wrapper { display:none; padding:20px; text-align:center; }
     #progress-bar { width: 0%; height: 8px; background: var(--jio-blue); border-radius: 4px; transition: width 0.2s; }
@@ -74,6 +88,7 @@ function startUp(form, target) {
 }
 </script>"""
 
+# --- Routes ---
 @app.route("/")
 def index():
     q = request.args.get("q", "").strip().lower()
@@ -105,23 +120,34 @@ def do_pdf_upload():
             return "OK"
     return "Error", 400
 
-@app.route("/do_up", methods=["POST"])
-def do_up():
+@app.route("/confirm", methods=["POST"])
+def confirm():
     if request.form.get("pw") == ADMIN_PASSWORD:
-        f, v = request.files.get("file"), request.form.get("name").replace(" ","_")
-        if f:
-            t_p = f"t_{v}.mp4"; f.save(t_p)
-            threading.Thread(target=full_bg_video, args=(t_p, v)).start()
-            return "OK"
-    return "Error", 400
+        t, p, tp = request.form.get("task"), request.form.get("pid"), request.form.get("type")
+        if tp == "video":
+            if t == "delete": cloudinary.uploader.destroy(p, resource_type="video", invalidate=True)
+            elif t == "rename": cloudinary.uploader.rename(p, request.form.get("new").replace(" ","_"), resource_type="video", invalidate=True)
+            return redirect("/")
+        else:
+            if t == "rename":
+                new_val = request.form.get("new").replace(" ","_")
+                threading.Thread(target=bg_pdf_rename, args=(p, new_val)).start()
+            elif t == "delete":
+                threading.Thread(target=bg_pdf_delete, args=(p,)).start()
+            return redirect(url_for('pdf_home'))
+    return "Wrong PIN"
 
-@app.route("/admin_upload")
-def admin_upload():
-    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><p>Sending to Server...</p></div><form id="upload-form" action="/do_up" method="POST" enctype="multipart/form-data" onsubmit="return startUp(this, \'/\')"><h3>Upload Video</h3><input type="file" name="file" required><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
-
-@app.route("/upload_pdf_page")
-def upload_pdf_page():
-    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><p>Sending to Server...</p></div><form id="upload-form" action="/do_pdf_upload" method="POST" enctype="multipart/form-data" onsubmit="return startUp(this, \'/pdf_home\')"><h3>New Book</h3><input type="file" name="file" required><br><input name="name" placeholder="Name"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
+@app.route("/view_pdf")
+def view_pdf():
+    name = request.args.get("name"); next_c = request.args.get("next")
+    try:
+        res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{name}/", max_results=10, next_cursor=next_c)
+        pages = sorted([p for p in res.get("resources", []) if p["format"] != "pdf"], key=lambda x: x["public_id"])
+        new_c = res.get("next_cursor")
+    except: pages = []; new_c = None
+    h = "".join([f'<div class="card"><img src="{p["secure_url"]}" style="width:100%;"><div class="action-bar"><a href="{p["secure_url"]}" download class="btn btn-jio" style="width:100%;">SAVE</a></div></div>' for p in pages])
+    nb = f"<a href='/view_pdf?name={name}&next={new_c}' class='btn btn-next'>NEXT</a>" if new_c else ""
+    return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-outline">← BACK</a><b>{name.split("__")[0]}</b></div>{h}{nb}'
 
 @app.route("/ai_home")
 def ai_home():
@@ -152,42 +178,23 @@ def enhance():
         ai_col.insert_one({"u": session['u'], "url": up['secure_url'], "t": time.time()})
     return redirect(url_for('ai_home'))
 
-@app.route("/view_pdf")
-def view_pdf():
-    name = request.args.get("name"); next_c = request.args.get("next")
-    try:
-        res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{name}/", max_results=10, next_cursor=next_c)
-        pages = sorted([p for p in res.get("resources", []) if p["format"] != "pdf"], key=lambda x: x["public_id"])
-        new_c = res.get("next_cursor")
-    except: pages = []; new_c = None
-    h = "".join([f'<div class="card"><img src="{p["secure_url"]}" style="width:100%;"><div class="action-bar"><a href="{p["secure_url"]}" download class="btn btn-jio" style="width:100%;">SAVE</a></div></div>' for p in pages])
-    nb = f"<a href='/view_pdf?name={name}&next={new_c}' class='btn btn-next'>NEXT</a>" if new_c else ""
-    return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-outline">← BACK</a><b>{name.split("__")[0]}</b></div>{h}{nb}'
+@app.route("/admin_upload")
+def admin_upload():
+    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><p>Sending to Server...</p></div><form id="upload-form" action="/do_up" method="POST" enctype="multipart/form-data" onsubmit="return startUp(this, \'/\')"><h3>Upload Video</h3><input type="file" name="file" required><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
 
-# PDF Rename/Delete Fixing Error
-@app.route("/confirm", methods=["POST"])
-def confirm():
+@app.route("/upload_pdf_page")
+def upload_pdf_page():
+    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><p>Sending to Server...</p></div><form id="upload-form" action="/do_pdf_upload" method="POST" enctype="multipart/form-data" onsubmit="return startUp(this, \'/pdf_home\')"><h3>New Book</h3><input type="file" name="file" required><br><input name="name" placeholder="Name"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
+
+@app.route("/do_up", methods=["POST"])
+def do_up():
     if request.form.get("pw") == ADMIN_PASSWORD:
-        t, p, tp = request.form.get("task"), request.form.get("pid"), request.form.get("type")
-        if tp == "video":
-            if t == "delete": cloudinary.uploader.destroy(p, resource_type="video", invalidate=True)
-            elif t == "rename": cloudinary.uploader.rename(p, request.form.get("new").replace(" ","_"), resource_type="video", invalidate=True)
-            return redirect("/")
-        else:
-            if t == "rename":
-                new_n = request.form.get("new").replace(" ","_") + "__" + str(int(time.time()))
-                # Fetching ALL resources to ensure no page is left
-                res = cloudinary.api.resources(prefix=f"pdf_data/{p}/", type="upload", max_results=500)
-                for r in res.get("resources", []):
-                    old_id = r['public_id']; new_id = old_id.replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/")
-                    cloudinary.uploader.rename(old_id, new_id)
-            elif t == "delete":
-                cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/")
-                time.sleep(1) # Wait for cloud to clear
-                try: cloudinary.api.delete_folder(f"pdf_data/{p}")
-                except: pass
-            return redirect(url_for('pdf_home'))
-    return "Wrong PIN"
+        f, v = request.files.get("file"), request.form.get("name").replace(" ","_")
+        if f:
+            t_p = f"t_{v}.mp4"; f.save(t_p)
+            threading.Thread(target=full_bg_video, args=(t_p, v)).start()
+            return "OK"
+    return "Error", 400
 
 @app.route("/modify")
 def modify():

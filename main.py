@@ -4,7 +4,7 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 app = Flask(__name__)
-app.secret_key = "jio_hotstar_ultra_v23_fixed"
+app.secret_key = "jio_hotstar_ultra_v24_stable"
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30 
 
 MONGO_URI = "mongodb+srv://talhasaikh77_db_user:AtifAI12345@cluster0.udiyfhu.mongodb.net/Atif_AI_Database?retryWrites=true&w=majority"
@@ -35,7 +35,7 @@ STYLE = """<style>
     .action-bar { display:flex; gap:5px; padding:10px; flex-wrap: wrap; }
     #progress-wrapper { display:none; padding:20px; }
     #progress-bar { width: 0%; height: 10px; background: var(--jio-blue); border-radius: 5px; transition: width 0.3s; }
-    .up-status { font-size: 14px; margin-top: 10px; text-align: center; color: #fff; font-weight: bold; }
+    .up-status { font-size: 14px; margin-top: 10px; text-align: center; color: #fff; }
 </style>
 <script>
 function uploadFile(form, targetUrl) {
@@ -46,17 +46,18 @@ function uploadFile(form, targetUrl) {
     
     xhr.upload.addEventListener('progress', (e) => {
         if (e.lengthComputable) {
-            const percent = (e.loaded / e.total) * 98; // Leave 2% for server handshake
+            const percent = (e.loaded / e.total) * 100;
             document.getElementById('progress-bar').style.width = percent + '%';
-            document.querySelector('.up-status').innerText = 'Sending to Server: ' + Math.round(percent) + '%';
+            document.querySelector('.up-status').innerText = 'Server Receiving: ' + Math.round(percent) + '%';
         }
     });
 
     xhr.onreadystatechange = () => {
-        if (xhr.readyState === 4) {
-            document.getElementById('progress-bar').style.width = '100%';
-            document.querySelector('.up-status').innerText = 'Complete! Redirecting...';
-            setTimeout(() => { window.location.href = targetUrl; }, 1000);
+        if (xhr.readyState === 4 && xhr.status === 200) {
+            window.location.href = targetUrl;
+        } else if (xhr.readyState === 4) {
+            alert('Upload failed or timeout. Try smaller file.');
+            location.reload();
         }
     };
     
@@ -76,8 +77,8 @@ def index():
         new_c = res.get("next_cursor")
     except: videos = []; new_c = None
     v_html = "".join([f'''<div class="card"><img src="{v["secure_url"].rsplit(".", 1)[0]}.jpg" class="thumb"><div style="padding:12px;"><b>{v["public_id"]}</b><div class="action-bar"><a href="{v["secure_url"]}" class="btn btn-outline" style="flex:1;">WATCH</a><a href="/modify?task=rename&pid={v["public_id"]}&type=video" class="btn btn-ren">NAME</a><a href="/modify?task=delete&pid={v["public_id"]}&type=video" class="btn btn-danger">DEL</a></div></div></div>''' for v in videos])
-    next_btn = f'<a href="/?next={new_c}&q={q}" class="btn btn-next">LOAD MORE</a>' if new_c else ""
-    return f'{STYLE}<div class="header"><a href="/" class="logo">JioTube</a><div><a href="/pdf_home" class="btn btn-outline">PDF</a> <a href="/ai_home" class="btn btn-jio">AI</a></div></div><form class="search-box"><input name="q" placeholder="Search..." value="{q}"><button>GO</button></form><div style="padding:0 12px;"><a href="/admin_upload" class="btn btn-jio">+ VIDEO</a></div>{v_html}{next_btn}'
+    nb = f'<a href="/?next={new_c}&q={q}" class="btn btn-next">LOAD MORE</a>' if new_c else ""
+    return f'{STYLE}<div class="header"><a href="/" class="logo">JioTube</a><div><a href="/pdf_home" class="btn btn-outline">PDF</a> <a href="/ai_home" class="btn btn-jio">AI</a></div></div><form class="search-box"><input name="q" placeholder="Search..." value="{q}"><button>GO</button></form><div style="padding:0 12px;"><a href="/admin_upload" class="btn btn-jio">+ VIDEO</a></div>{v_html}{nb}'
 
 @app.route("/pdf_home")
 def pdf_home():
@@ -95,7 +96,7 @@ def view_pdf():
         pages = sorted([p for p in res.get("resources", []) if p["format"] != "pdf"], key=lambda x: x["public_id"])
         new_c = res.get("next_cursor")
     except: pages = []; new_c = None
-    h = "".join([f'<div class="card"><img src="{p["secure_url"]}" style="width:100%;"><div class="action-bar"><a href="{p["secure_url"]}" download class="btn btn-jio" style="width:100%;">SAVE PAGE</a></div></div>' for p in pages])
+    h = "".join([f'<div class="card"><img src="{p["secure_url"]}" style="width:100%;"><div class="action-bar"><a href="{p["secure_url"]}" download class="btn btn-jio" style="width:100%;">SAVE</a></div></div>' for p in pages])
     nb = f"<a href='/view_pdf?name={name}&next={new_c}' class='btn btn-next'>NEXT</a>" if new_c else ""
     return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-outline">← BACK</a><b>{name.split("__")[0]}</b></div>{h}{nb}'
 
@@ -123,7 +124,7 @@ def confirm():
 
 def bg_pdf_process(pdf_url, folder_name):
     try:
-        r = requests.get(pdf_url, timeout=30); p_path = f"tmp_{int(time.time())}.pdf"
+        r = requests.get(pdf_url, timeout=60); p_path = f"tmp_{int(time.time())}.pdf"
         with open(p_path, 'wb') as f: f.write(r.content)
         doc = fitz.open(p_path)
         for i in range(len(doc)):
@@ -143,14 +144,17 @@ def do_pdf_upload():
             unique_name = f"{n}__{int(time.time())}"
             up = cloudinary.uploader.upload(f, resource_type="raw", public_id="source", folder=f"pdf_data/{unique_name}")
             threading.Thread(target=bg_pdf_process, args=(up['secure_url'], unique_name)).start()
-    return "OK"
+            return "OK"
+    return "Error", 400
 
 @app.route("/do_up", methods=["POST"])
 def do_up():
     if request.form.get("pw") == ADMIN_PASSWORD:
         f, v = request.files.get("file"), request.form.get("name").replace(" ","_")
-        if f: cloudinary.uploader.upload(f, resource_type="video", public_id=v)
-    return "OK"
+        if f: 
+            cloudinary.uploader.upload(f, resource_type="video", public_id=v)
+            return "OK"
+    return "Error", 400
 
 @app.route("/admin_upload")
 def admin_upload():

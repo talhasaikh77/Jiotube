@@ -4,7 +4,7 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 app = Flask(__name__)
-app.secret_key = "jio_hotstar_final_v20_unique"
+app.secret_key = "jio_hotstar_pro_v21_final"
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30 
 
 # Database & Cloudinary
@@ -52,10 +52,12 @@ def index():
 @app.route("/pdf_home")
 def pdf_home():
     q = request.args.get("q", "").strip().lower()
-    try: folders = cloudinary.api.subfolders("pdf_data")["folders"]
+    try:
+        # Cache bypass: naya data fetch karne ke liye
+        folders = cloudinary.api.subfolders("pdf_data")["folders"]
     except: folders = []
-    # Hum display ke liye folder ka asli naam dikhayenge (ID wala part chupa ke)
-    f_list = "".join([f'''<div class="card"><div style="padding:15px;"><b>{f["name"].split('___')[0].upper()}</b><div class="action-bar"><a href="/view_pdf?name={f["name"]}" class="btn btn-jio" style="flex:2;">OPEN</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" class="btn btn-danger">DEL</a></div></div></div>''' for f in folders if q in f["name"].lower()])
+    # Hum __ ke pehle wala asli naam dikhayenge
+    f_list = "".join([f'''<div class="card"><div style="padding:15px;"><b>{f["name"].split("__")[0].upper()}</b><div class="action-bar"><a href="/view_pdf?name={f["name"]}" class="btn btn-jio" style="flex:2;">OPEN</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" class="btn btn-danger">DEL</a></div></div></div>''' for f in folders if q in f["name"].lower()])
     return f'{STYLE}<div class="header"><a href="/" class="logo">JioPDF</a><a href="/upload_pdf_page" class="btn btn-jio">+ NEW BOOK</a></div><form class="search-box"><input name="q" placeholder="Search books..." value="{q}"><button>FIND</button></form>{f_list}'
 
 @app.route("/view_pdf")
@@ -68,7 +70,7 @@ def view_pdf():
     except: pages = []; new_c = None
     h = "".join([f'<div class="card"><img src="{p["secure_url"]}" style="width:100%;"><div class="action-bar"><a href="{p["secure_url"]}" download class="btn btn-jio" style="width:100%;">DOWNLOAD PAGE</a></div></div>' for p in pages])
     nb = f"<a href='/view_pdf?name={name}&next={new_c}' class='btn btn-next'>NEXT 10 PAGES</a>" if new_c else ""
-    return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-outline">← BACK</a><b>{name.split("___")[0]}</b></div>{h}{nb}'
+    return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-outline">← BACK</a><b>{name.split("__")[0]}</b></div>{h}{nb}'
 
 @app.route("/confirm", methods=["POST"])
 def confirm():
@@ -80,11 +82,13 @@ def confirm():
             return redirect("/")
         else:
             if t == "delete":
+                # Step 1: Saari files ko mitao
                 cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", invalidate=True)
-                time.sleep(1)
+                # Step 2: Folder mitao
+                time.sleep(1.5) # Cloudinary ko sync hone ka time do
                 try: cloudinary.api.delete_folder(f"pdf_data/{p}")
                 except: pass
-            return redirect(url_for('pdf_home', _t=time.time()))
+            return redirect(url_for('pdf_home', _cache=time.time()))
     return "Wrong PIN"
 
 @app.route("/do_pdf_upload", methods=["POST"])
@@ -92,8 +96,8 @@ def do_pdf_upload():
     if request.form.get("pw") == ADMIN_PASSWORD:
         f, n = request.files.get("file"), request.form.get("name").replace(" ","_")
         if f:
-            # UNIQUE FOLDER NAME: Naam + Timestamp taaki cache ka koi chakkar na rahe
-            unique_folder = f"{n}___{int(time.time())}"
+            # UNIQUE ID taaki purana cache na dikhe
+            unique_name = f"{n}__{int(time.time())}"
             p_path = f"temp_{int(time.time())}.pdf"; f.save(p_path)
             def process_pdf(path, folder_name):
                 try:
@@ -106,16 +110,16 @@ def do_pdf_upload():
                         os.remove(img_path)
                     doc.close(); os.remove(path)
                 except: pass
-            threading.Thread(target=process_pdf, args=(p_path, unique_folder)).start()
+            threading.Thread(target=process_pdf, args=(p_path, unique_name)).start()
     return redirect("/pdf_home")
 
-# --- Baaki saare routes (ai_home, auth, enhance, modify, etc.) pehle wale hi rakhe hain ---
+# --- AI & Other Routes ---
 @app.route("/ai_home")
 def ai_home():
     if 'u' not in session: return redirect(url_for('ai_auth'))
     history = list(ai_col.find({"u": session['u']}).sort("t", -1).limit(20))
     h_html = "".join([f'<div class="card"><img src="{i["url"]}" style="width:100%;"><div class="action-bar"><a href="{i["url"]}" download class="btn btn-jio" style="flex:1;">SAVE</a><a href="/ai_del?id={str(i["_id"])}" class="btn btn-danger">DEL</a></div></div>' for i in history])
-    return f'{STYLE}<div class="header"><a href="/" class="logo">JioAI</a><a href="/logout" class="btn btn-danger">LOGOUT</a></div><div class="card" style="padding:20px;text-align:center;"><form action="/enhance" method="POST" enctype="multipart/form-data"><h3>Scan Image (1800px)</h3><input type="file" name="file" required><br><button class="btn btn-jio" style="width:90%;margin-top:10px;">ENHANCE NOW</button></form></div>{h_html}'
+    return f'{STYLE}<div class="header"><a href="/" class="logo">JioAI</a><a href="/logout" class="btn btn-danger">LOGOUT</a></div><div class="card" style="padding:20px;text-align:center;"><form action="/enhance" method="POST" enctype="multipart/form-data"><h3>Scan Image</h3><input type="file" name="file" required><br><button class="btn btn-jio" style="width:90%;margin-top:10px;">ENHANCE</button></form></div>{h_html}'
 
 @app.route("/ai_auth", methods=["GET", "POST"])
 def ai_auth():
@@ -126,7 +130,7 @@ def ai_auth():
         u = users_col.find_one({"m": m})
         if u and u['p'] == hash_pw(p):
             session.permanent = True; session['u'] = str(u['_id']); return redirect(url_for('ai_home'))
-    return f'{STYLE}<body style="display:flex;align-items:center;justify-content:center;height:100vh;"><div class="card" style="width:85%;padding:30px;text-align:center;"><h2>JioAI</h2><form method="POST"><input name="m" placeholder="Mobile" required style="width:90%;padding:10px;margin:5px;"><br><input name="pw" type="password" placeholder="Pass" required style="width:90%;padding:10px;margin:5px;"><br><br><button name="act" value="log" class="btn btn-jio" style="width:100%;">LOGIN</button><br><button name="act" value="reg" class="btn btn-outline" style="width:100%;margin-top:10px;color:#fff;">REGISTER</button></form></div></body>'
+    return f'{STYLE}<body style="display:flex;align-items:center;justify-content:center;height:100vh;"><div class="card" style="width:85%;padding:30px;text-align:center;"><h2>JioAI</h2><form method="POST"><input name="m" placeholder="Mobile" required style="width:90%;padding:10px;margin:5px;"><br><input name="pw" type="password" placeholder="Pass" required style="width:90%;padding:10px;margin:5px;"><br><br><button name="act" value="log" class="btn btn-jio" style="width:100%;">LOGIN</button></form></div></body>'
 
 @app.route("/enhance", methods=["POST"])
 def enhance():
@@ -158,7 +162,7 @@ def do_up():
 @app.route("/modify")
 def modify():
     t, p, tp = request.args.get("task"), request.args.get("pid"), request.args.get("type")
-    return render_template_string(f'{STYLE}<div class="card" style="padding:30px;text-align:center;"><h3>Admin: {t.upper()}</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{"<input name=\'new\' placeholder=\'New Name\' required style=\'width:90%;padding:10px;margin-bottom:10px;\'><br>" if t=="rename" else ""}<input name="pw" type="password" placeholder="Admin PIN" required style="width:90%;padding:10px;"><br><br><button class="btn btn-danger" style="width:100%;">CONFIRM ACTION</button></form></div>', p=p, t=t, tp=tp)
+    return render_template_string(f'{STYLE}<div class="card" style="padding:30px;text-align:center;"><h3>Admin: {t.upper()}</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{"<input name=\'new\' placeholder=\'New Name\' required style=\'width:90%;padding:10px;\'><br>" if t=="rename" else ""}<input name="pw" type="password" placeholder="PIN" required style="width:90%;padding:10px;"><br><br><button class="btn btn-danger" style="width:100%;">CONFIRM</button></form></div>', p=p, t=t, tp=tp)
 
 @app.route("/logout")
 def logout(): session.clear(); return redirect("/")

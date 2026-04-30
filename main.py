@@ -3,7 +3,7 @@ from flask import Flask, request, redirect, render_template_string, session, url
 from pymongo import MongoClient
 
 app = Flask(__name__)
-app.secret_key = "atif_force_wipe_v12"
+app.secret_key = "atif_jio_hotstar_v14"
 
 # Database & Cloudinary
 MONGO_URI = "mongodb+srv://talhasaikh77_db_user:AtifAI12345@cluster0.udiyfhu.mongodb.net/Atif_AI_Database?retryWrites=true&w=majority"
@@ -18,15 +18,18 @@ except: print("DB Connection Error")
 ADMIN_PASSWORD = "809047"
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
 
+# JioHotstar Premium Dark Theme
 STYLE = """<style>
-    body { margin:0; font-family:sans-serif; background:#f0f2f5; color:#1c1e21; }
-    .header { background: linear-gradient(135deg, #1e3c72, #2a5298); color:#fff; padding:15px; text-align:center; box-shadow:0 2px 10px rgba(0,0,0,0.2); position:sticky; top:0; z-index:1000; }
-    .card { background:#fff; margin:10px; border-radius:12px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,0.08); border-bottom:4px solid #0078d7; }
-    .btn { display:inline-block; padding:8px 12px; border-radius:6px; text-decoration:none; font-size:11px; font-weight:bold; color:#fff; margin:2px; transition:0.2s; border:none; cursor:pointer; }
-    .btn-dl { background:#28a745; } .btn-play { background:#0078d7; } .btn-del { background:#e74c3c; } .btn-ren { background:#f39c12; }
-    .search-box { background:#fff; display:flex; margin:12px; border-radius:30px; overflow:hidden; border:1px solid #ddd; }
-    .search-box input { flex:1; border:none; padding:12px 18px; outline:none; }
-    .search-box button { background:#0078d7; color:#fff; border:none; padding:0 20px; font-weight:bold; }
+    body { margin:0; font-family: sans-serif; background:#0f1014; color:#fff; }
+    .header { background: #0f1014; padding:15px; text-align:center; border-bottom: 1px solid #252833; position:sticky; top:0; z-index:1000; }
+    .card { background:#16181f; margin:12px; border-radius:8px; overflow:hidden; border: 1px solid #252833; }
+    .btn { display:inline-block; padding:10px 15px; border-radius:4px; text-decoration:none; font-size:12px; font-weight:bold; color:#fff; margin:2px; border:none; cursor:pointer; }
+    .btn-dl { background:#0072ef; } .btn-play { background:rgba(255,255,255,0.1); border:1px solid #fff; } .btn-del { background:#e50914; } .btn-ren { background:#ff9900; }
+    .btn-next { background:#252833; width:92%; padding:15px; display:block; text-align:center; margin:15px auto; border-radius:8px; color:#fff; }
+    .search-box { background:#252833; display:flex; margin:12px; border-radius:4px; overflow:hidden; }
+    .search-box input { flex:1; border:none; padding:12px; outline:none; background:transparent; color:#fff; }
+    .search-box button { background:#0072ef; color:#fff; border:none; padding:0 20px; }
+    .thumb { width:100%; height:180px; object-fit:cover; background:#000; }
 </style>"""
 
 def process_pdf_background(pdf_path, pdf_name):
@@ -54,16 +57,18 @@ def index():
         videos = [v for v in res.get("resources", []) if q in v.get("public_id", "").lower()]
         new_c = res.get("next_cursor")
     except: videos = []; new_c = None
-    v_html = "".join([f'<div class="card"><img src="{v["secure_url"].rsplit(".", 1)[0]}.jpg" style="width:100%;height:160px;object-fit:fill;"><div style="padding:10px;"><b>{v["public_id"]}</b><br><br><div style="display:flex;gap:4px;"><a href="{v["secure_url"]}" class="btn btn-play" style="flex:1;text-align:center;">OPEN</a><a href="/modify?task=delete&pid={v["public_id"]}&type=video" class="btn btn-del" style="flex:1;text-align:center;">DELETE</a></div></div></div>' for v in videos])
-    return f'{STYLE}<div class="header"><h2>JioTube</h2><div style="margin-top:8px;"><a href="/admin_upload" class="btn btn-dl">+ VIDEO</a><a href="/pdf_home" class="btn btn-del">PDF LIST</a></div></div><form class="search-box"><input name="q" placeholder="Search..." value="{q}"><button>GO</button></form>{v_html}'
+    v_html = "".join([f'<div class="card"><img src="{v["secure_url"].rsplit(".", 1)[0]}.jpg" class="thumb"><div style="padding:12px;"><b>{v["public_id"]}</b><br><br><div style="display:flex;gap:5px;"><a href="{v["secure_url"]}" class="btn btn-play" style="flex:1;text-align:center;">WATCH</a><a href="/modify?task=rename&pid={v["public_id"]}&type=video" class="btn btn-ren">NAME</a><a href="/modify?task=delete&pid={v["public_id"]}&type=video" class="btn btn-del">DEL</a></div></div></div>' for v in videos])
+    next_btn = f'<a href="/?next={new_c}&q={q}" class="btn btn-next">LOAD MORE VIDEOS</a>' if new_c else ""
+    return f'{STYLE}<div class="header"><h2 style="color:#0072ef;margin:0;">JioHotstar</h2><div style="margin-top:10px;"><a href="/admin_upload" class="btn btn-dl">+ VIDEO</a><a href="/pdf_home" class="btn btn-play">PDF BOOKS</a><a href="/ai_home" class="btn" style="background:#8e44ad;">AI SCAN</a></div></div><form class="search-box"><input name="q" placeholder="Search movies..." value="{q}"><button>GO</button></form>{v_html}{next_btn}'
 
 @app.route("/pdf_home")
 def pdf_home():
     q = request.args.get("q", "").strip().lower()
     try: folders = cloudinary.api.subfolders("pdf_data")["folders"]
     except: folders = []
-    f_list = "".join([f"""<div class="card" style="border-left:8px solid #e74c3c;padding:15px;"><b style="color:#c0392b;">{f["name"].upper()}</b><br><br><div style="display:flex;gap:4px;"><a href="/view_pdf?name={f["name"]}" class="btn btn-play" style="flex:2;text-align:center;">OPEN</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" class="btn btn-del" style="flex:1;text-align:center;">DELETE</a></div></div>""" for f in folders if q in f["name"].lower()])
-    return f'{STYLE}<div class="header" style="background:#c0392b;"><h2>PDF List</h2><a href="/" style="color:#fff;">← HOME</a><a href="/upload_pdf_page" class="btn btn-dl" style="margin-left:10px;">+ NEW PDF</a></div><form class="search-box"><input name="q" placeholder="Search Books..." value="{q}"><button style="background:#c0392b;">FIND</button></form>{f_list}'
+    # Folder filter taaki khali ya deleted folder na dikhein
+    f_list = "".join([f'<div class="card"><div style="padding:15px;"><b>{f["name"].upper()}</b><br><br><div style="display:flex;gap:5px;"><a href="/view_pdf?name={f["name"]}" class="btn btn-dl" style="flex:2;text-align:center;">OPEN BOOK</a><a href="/modify?task=rename&pid={f["name"]}&type=pdf" class="btn btn-ren">NAME</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" class="btn btn-del">DEL</a></div></div></div>' for f in folders if q in f["name"].lower()])
+    return f'{STYLE}<div class="header"><h2>PDF Archive</h2><a href="/" class="btn btn-play">← BACK</a><a href="/upload_pdf_page" class="btn btn-dl" style="margin-left:10px;">+ NEW PDF</a></div><form class="search-box"><input name="q" placeholder="Search books..." value="{q}"><button>FIND</button></form>{f_list}'
 
 @app.route("/view_pdf")
 def view_pdf():
@@ -74,13 +79,38 @@ def view_pdf():
         new_c = res.get("next_cursor")
     except: pages = []; new_c = None
     h = "".join([f'<div class="card"><img src="{p["secure_url"]}" style="width:100%;"></div>' for p in pages])
-    return f'{STYLE}<div class="header" style="background:#333;"><h3>{name.upper()}</h3><a href="/pdf_home" style="color:#fff;">← BACK</a></div>{h}'
+    next_btn = f"<a href='/view_pdf?name={name}&next={new_c}' class='btn btn-next'>LOAD NEXT PAGES</a>" if new_c else ""
+    return f'{STYLE}<div class="header"><h3>{name.upper()}</h3><a href="/pdf_home" class="btn btn-play">← LIST</a></div>{h}{next_btn}'
+
+@app.route("/ai_home")
+def ai_home():
+    if 'u' not in session: return redirect(url_for('ai_login'))
+    history = list(ai_col.find({"u": session['u']}).sort("t", -1).limit(10))
+    h_html = "".join([f'<div class="card"><img src="{i["url"]}" style="width:100%;"><div style="padding:10px;text-align:center;"><a href="{i["url"]}" download class="btn btn-dl">DOWNLOAD JPG</a></div></div>' for i in history])
+    return f'{STYLE}<div class="header"><h2>AI Scanner Pro</h2><a href="/" class="btn btn-play">← HOME</a></div><div class="card" style="padding:20px;text-align:center;"><form action="/enhance" method="POST" enctype="multipart/form-data"><input type="file" name="file" required><br><br><button class="btn btn-dl" style="width:100%;padding:15px;">SCAN & IMPROVE</button></form></div>{h_html}<div style="text-align:center;padding:15px;"><a href="/logout" style="color:#e50914;">Logout</a></div>'
+
+@app.route("/enhance", methods=["POST"])
+def enhance():
+    if 'u' not in session: return redirect(url_for('ai_login'))
+    f = request.files.get("file")
+    if f:
+        up = cloudinary.uploader.upload(f, folder="ai_enhanced", format="jpg", transformation=[{"gravity": "auto", "crop": "limit", "width": 1900}, {"effect": "improve:outdoor"}, {"effect": "sharpen:150"}])
+        ai_col.insert_one({"u": session['u'], "url": up['secure_url'], "t": time.time()})
+    return redirect(url_for('ai_home'))
+
+@app.route("/ai_login", methods=["GET", "POST"])
+def ai_login():
+    if request.method == "POST":
+        u = users_col.find_one({"m": request.form.get("m")})
+        if u and u['p'] == hash_pw(request.form.get("pw")):
+            session.permanent = True; session['u'] = str(u['_id']); return redirect(url_for('ai_home'))
+    return f'{STYLE}<body style="display:flex;align-items:center;justify-content:center;height:100vh;"><div class="card" style="width:85%;padding:30px;text-align:center;"><h3>Login AI</h3><form method="POST"><input name="m" placeholder="Mobile"><br><input name="pw" type="password" placeholder="Pass"><br><button class="btn btn-dl" style="width:100%;margin-top:10px;">ENTER</button></form></div></body>'
 
 @app.route("/admin_upload")
-def admin_upload(): return render_template_string(f'{STYLE}<div class="header"><h2>Upload</h2></div><form action="/do_up" method="POST" enctype="multipart/form-data" class="card" style="padding:20px;text-align:center;"><input type="file" name="file"><br><input name="name" placeholder="Name"><br><input name="pw" type="password" placeholder="Pass"><br><button class="btn btn-play">UPLOAD</button></form>')
+def admin_upload(): return render_template_string(f'{STYLE}<div class="header"><h2>Upload Video</h2></div><form action="/do_up" method="POST" enctype="multipart/form-data" class="card" style="padding:20px;text-align:center;"><input type="file" name="file"><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="Admin Pass"><br><button class="btn btn-dl">UPLOAD</button></form>')
 
 @app.route("/upload_pdf_page")
-def upload_pdf_page(): return render_template_string(f'{STYLE}<div class="header" style="background:#c0392b;"><h2>New PDF</h2></div><form action="/do_pdf_upload" method="POST" enctype="multipart/form-data" class="card" style="padding:20px;text-align:center;"><input type="file" name="file"><br><input name="name" placeholder="Book Name"><br><input name="pw" type="password" placeholder="Pass"><br><button class="btn btn-del">START</button></form>')
+def upload_pdf_page(): return render_template_string(f'{STYLE}<div class="header"><h2>New PDF</h2></div><form action="/do_pdf_upload" method="POST" enctype="multipart/form-data" class="card" style="padding:20px;text-align:center;"><input type="file" name="file"><br><input name="name" placeholder="Book Name"><br><input name="pw" type="password" placeholder="Admin Pass"><br><button class="btn btn-dl">START</button></form>')
 
 @app.route("/do_up", methods=["POST"])
 def do_up():
@@ -101,24 +131,34 @@ def do_pdf_upload():
 @app.route("/modify")
 def modify():
     t, p, tp = request.args.get("task"), request.args.get("pid"), request.args.get("type")
-    return render_template_string(f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><h3>Confirm Delete?</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="type" value="{{tp}}"><input name="pw" type="password" placeholder="Pass"><br><br><button class="btn btn-del">YES, DELETE</button></form></div>', p=p, tp=tp)
+    return render_template_string(f'{STYLE}<div class="card" style="padding:25px;text-align:center;"><h3>Confirm Action</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{% if t=="rename" %}<input name="new" placeholder="New Name"><br><br>{% endif %}<input name="pw" type="password" placeholder="Admin Pass"><br><br><button class="btn btn-del">CONFIRM</button></form></div>', t=t, p=p, tp=tp)
 
 @app.route("/confirm", methods=["POST"])
 def confirm():
     if request.form.get("pw") == ADMIN_PASSWORD:
-        p, tp = request.form.get("pid"), request.form.get("type")
-        if tp == "video": cloudinary.uploader.destroy(p, resource_type="video")
+        t, p, tp = request.form.get("task"), request.form.get("pid"), request.form.get("type")
+        if tp == "video":
+            if t == "rename": cloudinary.uploader.rename(p, request.form.get("new").replace(" ","_"), resource_type="video")
+            elif t == "delete": cloudinary.uploader.destroy(p, resource_type="video", invalidate=True)
+            return redirect("/")
         else:
-            # Force Wipe: Image, Video, Raw sab saaf karo
-            for r_type in ["image", "video", "raw"]:
-                try: cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", resource_type=r_type)
-                except: pass
-            # Folder ko force delete karne ke liye multiple attempts
-            for _ in range(3):
+            if t == "rename":
+                res = cloudinary.api.resources(prefix=f"pdf_data/{p}/")
+                new_n = request.form.get("new").replace(" ","_")
+                for r in res.get("resources", []):
+                    cloudinary.uploader.rename(r['public_id'], r['public_id'].replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/"))
+            elif t == "delete":
+                # Poora folder saaf karne ka sabse fast tareeka
+                cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", resource_type="image", invalidate=True)
+                cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", resource_type="raw", invalidate=True)
+                # Folder ko turant list se hatane ke liye
                 try: cloudinary.api.delete_folder(f"pdf_data/{p}")
-                except: time.sleep(1)
-        return redirect("/pdf_home" if tp=="pdf" else "/")
+                except: pass
+            return redirect("/pdf_home")
     return "Wrong Pass"
+
+@app.route("/logout")
+def logout(): session.clear(); return redirect("/")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

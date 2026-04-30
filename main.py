@@ -4,7 +4,7 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 app = Flask(__name__)
-app.secret_key = "jio_hotstar_ultra_v28_final_stable"
+app.secret_key = "jio_hotstar_ultra_v29_final_fix"
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30 
 
 MONGO_URI = "mongodb+srv://talhasaikh77_db_user:AtifAI12345@cluster0.udiyfhu.mongodb.net/Atif_AI_Database?retryWrites=true&w=majority"
@@ -19,7 +19,7 @@ except: print("DB Connection Error")
 ADMIN_PASSWORD = "809047"
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
 
-# --- Background Workers ---
+# Background Processing (Keep as is)
 def full_bg_pdf(file_path, unique_name):
     try:
         cloudinary.uploader.upload(file_path, resource_type="raw", public_id="source", folder=f"pdf_data/{unique_name}")
@@ -33,28 +33,12 @@ def full_bg_pdf(file_path, unique_name):
         if os.path.exists(file_path): os.remove(file_path)
     except: pass
 
-def bg_pdf_rename(old_folder, new_folder_name):
+def full_bg_video(file_path, v_id):
     try:
-        new_folder_full = f"{new_folder_name}__{int(time.time())}"
-        res = cloudinary.api.resources(prefix=f"pdf_data/{old_folder}/", type="upload", max_results=500)
-        for r in res.get("resources", []):
-            old_id = r['public_id']
-            new_id = old_id.replace(f"pdf_data/{old_folder}", f"pdf_data/{new_folder_full}")
-            cloudinary.uploader.rename(old_id, new_id)
-        # Also move the raw source file
-        try: cloudinary.uploader.rename(f"pdf_data/{old_folder}/source", f"pdf_data/{new_folder_full}/source", resource_type="raw")
-        except: pass
+        cloudinary.uploader.upload(file_path, resource_type="video", public_id=v_id)
+        if os.path.exists(file_path): os.remove(file_path)
     except: pass
 
-def bg_pdf_delete(folder_name):
-    try:
-        cloudinary.api.delete_resources_by_prefix(f"pdf_data/{folder_name}/")
-        time.sleep(2)
-        try: cloudinary.api.delete_folder(f"pdf_data/{folder_name}")
-        except: pass
-    except: pass
-
-# --- UI Styles ---
 STYLE = """<style>
     :root { --jio-blue: #0072ef; --bg: #0f1014; --card: #16181f; --border: #252833; }
     body { margin:0; font-family: sans-serif; background: var(--bg); color:#fff; }
@@ -67,6 +51,8 @@ STYLE = """<style>
     .search-box { background: var(--border); display:flex; margin:12px; border-radius:8px; overflow:hidden; border: 1px solid #333; }
     .search-box input { flex:1; border:none; padding:12px; outline:none; background:transparent; color:#fff; }
     .search-box button { background: var(--jio-blue); color:#fff; border:none; padding:0 20px; }
+    .thumb { width:100%; height:200px; object-fit:cover; background:#000; }
+    .action-bar { display:flex; gap:5px; padding:10px; flex-wrap: wrap; }
     input[type="text"], input[type="password"], input[type="file"] { width:90%; padding:12px; margin:8px 0; border-radius:6px; border:1px solid var(--border); background:#1c1e26; color:#fff; }
     #progress-wrapper { display:none; padding:20px; text-align:center; }
     #progress-bar { width: 0%; height: 8px; background: var(--jio-blue); border-radius: 4px; transition: width 0.2s; }
@@ -88,7 +74,6 @@ function startUp(form, target) {
 }
 </script>"""
 
-# --- Routes ---
 @app.route("/")
 def index():
     q = request.args.get("q", "").strip().lower()
@@ -110,16 +95,6 @@ def pdf_home():
     f_list = "".join([f'''<div class="card"><div style="padding:15px;"><b>{f["name"].split("__")[0].upper()}</b><div class="action-bar"><a href="/view_pdf?name={f["name"]}" class="btn btn-jio" style="flex:2;">OPEN</a><a href="/modify?task=rename&pid={f["name"]}&type=pdf" class="btn btn-ren">NAME</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" class="btn btn-danger">DEL</a></div></div></div>''' for f in folders if q in f["name"].lower()])
     return f'{STYLE}<div class="header"><a href="/" class="logo">JioPDF</a><a href="/upload_pdf_page" class="btn btn-jio">+ NEW BOOK</a></div><form class="search-box"><input name="q" placeholder="Search books..." value="{q}"><button>FIND</button></form>{f_list}'
 
-@app.route("/do_pdf_upload", methods=["POST"])
-def do_pdf_upload():
-    if request.form.get("pw") == ADMIN_PASSWORD:
-        f, n = request.files.get("file"), request.form.get("name").replace(" ","_")
-        if f:
-            u_n = f"{n}__{int(time.time())}"; t_p = f"t_{u_n}.pdf"; f.save(t_p)
-            threading.Thread(target=full_bg_pdf, args=(t_p, u_n)).start()
-            return "OK"
-    return "Error", 400
-
 @app.route("/confirm", methods=["POST"])
 def confirm():
     if request.form.get("pw") == ADMIN_PASSWORD:
@@ -130,10 +105,25 @@ def confirm():
             return redirect("/")
         else:
             if t == "rename":
-                new_val = request.form.get("new").replace(" ","_")
-                threading.Thread(target=bg_pdf_rename, args=(p, new_val)).start()
+                new_n = request.form.get("new").replace(" ","_") + "__" + str(int(time.time()))
+                res = cloudinary.api.resources(prefix=f"pdf_data/{p}/", max_results=500)
+                for r in res.get("resources", []):
+                    old_id = r['public_id']
+                    new_id = old_id.replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/")
+                    cloudinary.uploader.rename(old_id, new_id, invalidate=True)
+                # Raw file handle
+                try: cloudinary.uploader.rename(f"pdf_data/{p}/source", f"pdf_data/{new_n}/source", resource_type="raw", invalidate=True)
+                except: pass
             elif t == "delete":
-                threading.Thread(target=bg_pdf_delete, args=(p,)).start()
+                # Step 1: Delete all images
+                cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", invalidate=True)
+                # Step 2: Delete raw source file
+                try: cloudinary.api.delete_resources([f"pdf_data/{p}/source"], resource_type="raw", invalidate=True)
+                except: pass
+                # Step 3: Delete the folder itself
+                time.sleep(2)
+                try: cloudinary.api.delete_folder(f"pdf_data/{p}")
+                except: pass
             return redirect(url_for('pdf_home'))
     return "Wrong PIN"
 

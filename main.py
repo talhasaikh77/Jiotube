@@ -4,10 +4,9 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 app = Flask(__name__)
-app.secret_key = "jio_hotstar_ultra_v23"
+app.secret_key = "jio_hotstar_ultra_v23_fixed"
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30 
 
-# Database & Cloudinary
 MONGO_URI = "mongodb+srv://talhasaikh77_db_user:AtifAI12345@cluster0.udiyfhu.mongodb.net/Atif_AI_Database?retryWrites=true&w=majority"
 cloudinary.config(cloud_name="dawterffe", api_key="258318685843824", api_secret="NxTNXBeLmupMQ0S1FOPU9t6bcjo", secure=True)
 
@@ -44,21 +43,14 @@ function uploadFile(form, targetUrl) {
     const xhr = new XMLHttpRequest();
     document.getElementById('progress-wrapper').style.display = 'block';
     document.getElementById('upload-form').style.display = 'none';
-
     xhr.upload.addEventListener('progress', (e) => {
         if (e.lengthComputable) {
             const percent = (e.loaded / e.total) * 100;
             document.getElementById('progress-bar').style.width = percent + '%';
-            document.querySelector('.up-status').innerText = 'Uploading to Cloud: ' + Math.round(percent) + '%';
+            document.querySelector('.up-status').innerText = 'Uploading: ' + Math.round(percent) + '%';
         }
     });
-
-    xhr.onreadystatechange = () => {
-        if (xhr.readyState === 4) {
-            window.location.href = targetUrl;
-        }
-    };
-
+    xhr.onreadystatechange = () => { if (xhr.readyState === 4) window.location.href = targetUrl; };
     xhr.open('POST', form.action, true);
     xhr.send(formData);
     return false;
@@ -75,7 +67,7 @@ def index():
         new_c = res.get("next_cursor")
     except: videos = []; new_c = None
     v_html = "".join([f'''<div class="card"><img src="{v["secure_url"].rsplit(".", 1)[0]}.jpg" class="thumb"><div style="padding:12px;"><b>{v["public_id"]}</b><div class="action-bar"><a href="{v["secure_url"]}" class="btn btn-outline" style="flex:1;">WATCH</a><a href="/modify?task=rename&pid={v["public_id"]}&type=video" class="btn btn-ren">NAME</a><a href="/modify?task=delete&pid={v["public_id"]}&type=video" class="btn btn-danger">DEL</a></div></div></div>''' for v in videos])
-    next_btn = f'<a href="/?next={new_c}&q={q}" class="btn btn-next">LOAD MORE VIDEOS</a>' if new_c else ""
+    next_btn = f'<a href="/?next={new_c}&q={q}" class="btn btn-next">LOAD MORE</a>' if new_c else ""
     return f'{STYLE}<div class="header"><a href="/" class="logo">JioTube</a><div><a href="/pdf_home" class="btn btn-outline">PDF</a> <a href="/ai_home" class="btn btn-jio">AI</a></div></div><form class="search-box"><input name="q" placeholder="Search..." value="{q}"><button>GO</button></form><div style="padding:0 12px;"><a href="/admin_upload" class="btn btn-jio">+ VIDEO</a></div>{v_html}{next_btn}'
 
 @app.route("/pdf_home")
@@ -94,9 +86,9 @@ def view_pdf():
         pages = sorted([p for p in res.get("resources", []) if p["format"] != "pdf"], key=lambda x: x["public_id"])
         new_c = res.get("next_cursor")
     except: pages = []; new_c = None
-    h = "".join([f'<div class="card"><img src="{p["secure_url"]}" style="width:100%;"><div class="action-bar"><a href="{p["secure_url"]}" download class="btn btn-jio" style="width:100%;">DOWNLOAD PAGE</a></div></div>' for p in pages])
-    nb = f"<a href='/view_pdf?name={name}&next={new_c}' class='btn btn-next'>NEXT 10 PAGES</a>" if new_c else ""
-    return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-outline">← BACK</a><b>{name.split("__")[0]}</b></div><div style="text-align:center;padding:10px;color:#aaa;font-size:12px;">Processing might take a few mins for new uploads...</div>{h}{nb}'
+    h = "".join([f'<div class="card"><img src="{p["secure_url"]}" style="width:100%;"><div class="action-bar"><a href="{p["secure_url"]}" download class="btn btn-jio" style="width:100%;">SAVE PAGE</a></div></div>' for p in pages])
+    nb = f"<a href='/view_pdf?name={name}&next={new_c}' class='btn btn-next'>NEXT</a>" if new_c else ""
+    return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-outline">← BACK</a><b>{name.split("__")[0]}</b></div>{h}{nb}'
 
 @app.route("/confirm", methods=["POST"])
 def confirm():
@@ -127,11 +119,12 @@ def bg_pdf_process(pdf_url, folder_name):
         doc = fitz.open(p_path)
         for i in range(len(doc)):
             pix = doc.load_page(i).get_pixmap(matrix=fitz.Matrix(2, 2))
-            img_p = f"p{i+1}.jpg"; pix.save(img_p)
+            img_p = f"p{i+1:03d}.jpg"; pix.save(img_p)
             cloudinary.uploader.upload(img_p, public_id=f"p{i+1:03d}", folder=f"pdf_data/{folder_name}")
-            os.remove(img_p)
-        doc.close(); os.remove(p_path)
-    except Exception as e: print(f"BG Error: {e}")
+            if os.path.exists(img_p): os.remove(img_p)
+        doc.close()
+        if os.path.exists(p_path): os.remove(p_path)
+    except: pass
 
 @app.route("/do_pdf_upload", methods=["POST"])
 def do_pdf_upload():
@@ -139,9 +132,7 @@ def do_pdf_upload():
         f, n = request.files.get("file"), request.form.get("name").replace(" ","_")
         if f:
             unique_name = f"{n}__{int(time.time())}"
-            # 1. Upload Raw PDF to Cloudinary first (Very Fast)
             up = cloudinary.uploader.upload(f, resource_type="raw", public_id="source", folder=f"pdf_data/{unique_name}")
-            # 2. Trigger background worker to convert to JPG
             threading.Thread(target=bg_pdf_process, args=(up['secure_url'], unique_name)).start()
     return "OK"
 
@@ -154,16 +145,17 @@ def do_up():
 
 @app.route("/admin_upload")
 def admin_upload():
-    return f'{STYLE}<div class="header"><a href="/" class="btn btn-outline">← BACK</a></div><div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><div class="up-status">Preparing...</div></div><form id="upload-form" action="/do_up" method="POST" enctype="multipart/form-data" onsubmit="return uploadFile(this, \'/\')"><h3>Upload Video</h3><input type="file" name="file" required><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">START UPLOAD</button></form></div>'
+    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><div class="up-status">Wait...</div></div><form id="upload-form" action="/do_up" method="POST" enctype="multipart/form-data" onsubmit="return uploadFile(this, \'/\')"><h3>Upload Video</h3><input type="file" name="file" required><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">START</button></form></div>'
 
 @app.route("/upload_pdf_page")
 def upload_pdf_page():
-    return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-outline">← BACK</a></div><div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><div class="up-status">Uploading PDF...</div></div><form id="upload-form" action="/do_pdf_upload" method="POST" enctype="multipart/form-data" onsubmit="return uploadFile(this, \'/pdf_home\')"><h3>New PDF Book</h3><input type="file" name="file" required><br><input name="name" placeholder="Book Name"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD & PROCESS</button></form></div>'
+    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><div class="up-status">Wait...</div></div><form id="upload-form" action="/do_pdf_upload" method="POST" enctype="multipart/form-data" onsubmit="return uploadFile(this, \'/pdf_home\')"><h3>New Book</h3><input type="file" name="file" required><br><input name="name" placeholder="Name"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
 
 @app.route("/modify")
 def modify():
     t, p, tp = request.args.get("task"), request.args.get("pid"), request.args.get("type")
-    return render_template_string(f'{STYLE}<div class="card" style="padding:30px;text-align:center;"><h3>Admin: {t.upper()}</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{"<input name=\'new\' placeholder=\'New Name\' required style=\'width:90%;padding:10px;\'><br>" if t=="rename" else ""}<input name="pw" type="password" placeholder="PIN" required style="width:90%;padding:10px;"><br><br><button class="btn btn-danger" style="width:100%;">CONFIRM</button></form></div>', p=p, t=t, tp=tp)
+    # Syntax fix here
+    return render_template_string("""<style>:root{--bg:#0f1014;--card:#16181f;--jio-blue:#0072ef}body{background:var(--bg);color:#fff;font-family:sans-serif}.card{background:var(--card);margin:50px auto;padding:30px;width:80%;border-radius:12px;text-align:center}.btn-danger{background:#e50914;color:#fff;padding:10px;border:none;border-radius:6px;width:100%;cursor:pointer}</style><div class="card"><h3>Admin: {{t|upper}}</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{% if t=='rename' %}<input name="new" placeholder="New Name" required style="width:90%;padding:10px;margin-bottom:10px;"><br>{% endif %}<input name="pw" type="password" placeholder="PIN" required style="width:90%;padding:10px;"><br><br><button class="btn-danger">CONFIRM</button></form></div>""", p=p, t=t, tp=tp)
 
 @app.route("/ai_home")
 def ai_home():

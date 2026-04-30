@@ -1,6 +1,7 @@
 Flask
+pymongo
 cloudinary
 pymupdf
-pymongo[srv]
+requests
 certifi
 gunicorn

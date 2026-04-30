@@ -35,7 +35,7 @@ STYLE = """<style>
     .action-bar { display:flex; gap:5px; padding:10px; flex-wrap: wrap; }
     #progress-wrapper { display:none; padding:20px; }
     #progress-bar { width: 0%; height: 10px; background: var(--jio-blue); border-radius: 5px; transition: width 0.3s; }
-    .up-status { font-size: 12px; margin-top: 5px; text-align: center; color: #aaa; }
+    .up-status { font-size: 14px; margin-top: 10px; text-align: center; color: #fff; font-weight: bold; }
 </style>
 <script>
 function uploadFile(form, targetUrl) {
@@ -43,14 +43,23 @@ function uploadFile(form, targetUrl) {
     const xhr = new XMLHttpRequest();
     document.getElementById('progress-wrapper').style.display = 'block';
     document.getElementById('upload-form').style.display = 'none';
+    
     xhr.upload.addEventListener('progress', (e) => {
         if (e.lengthComputable) {
-            const percent = (e.loaded / e.total) * 100;
+            const percent = (e.loaded / e.total) * 98; // Leave 2% for server handshake
             document.getElementById('progress-bar').style.width = percent + '%';
-            document.querySelector('.up-status').innerText = 'Uploading: ' + Math.round(percent) + '%';
+            document.querySelector('.up-status').innerText = 'Sending to Server: ' + Math.round(percent) + '%';
         }
     });
-    xhr.onreadystatechange = () => { if (xhr.readyState === 4) window.location.href = targetUrl; };
+
+    xhr.onreadystatechange = () => {
+        if (xhr.readyState === 4) {
+            document.getElementById('progress-bar').style.width = '100%';
+            document.querySelector('.up-status').innerText = 'Complete! Redirecting...';
+            setTimeout(() => { window.location.href = targetUrl; }, 1000);
+        }
+    };
+    
     xhr.open('POST', form.action, true);
     xhr.send(formData);
     return false;
@@ -114,7 +123,7 @@ def confirm():
 
 def bg_pdf_process(pdf_url, folder_name):
     try:
-        r = requests.get(pdf_url); p_path = f"tmp_{int(time.time())}.pdf"
+        r = requests.get(pdf_url, timeout=30); p_path = f"tmp_{int(time.time())}.pdf"
         with open(p_path, 'wb') as f: f.write(r.content)
         doc = fitz.open(p_path)
         for i in range(len(doc)):
@@ -145,16 +154,15 @@ def do_up():
 
 @app.route("/admin_upload")
 def admin_upload():
-    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><div class="up-status">Wait...</div></div><form id="upload-form" action="/do_up" method="POST" enctype="multipart/form-data" onsubmit="return uploadFile(this, \'/\')"><h3>Upload Video</h3><input type="file" name="file" required><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">START</button></form></div>'
+    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><div class="up-status">Preparing...</div></div><form id="upload-form" action="/do_up" method="POST" enctype="multipart/form-data" onsubmit="return uploadFile(this, \'/\')"><h3>Upload Video</h3><input type="file" name="file" required><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">START</button></form></div>'
 
 @app.route("/upload_pdf_page")
 def upload_pdf_page():
-    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><div class="up-status">Wait...</div></div><form id="upload-form" action="/do_pdf_upload" method="POST" enctype="multipart/form-data" onsubmit="return uploadFile(this, \'/pdf_home\')"><h3>New Book</h3><input type="file" name="file" required><br><input name="name" placeholder="Name"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
+    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><div class="up-status">Preparing...</div></div><form id="upload-form" action="/do_pdf_upload" method="POST" enctype="multipart/form-data" onsubmit="return uploadFile(this, \'/pdf_home\')"><h3>New Book</h3><input type="file" name="file" required><br><input name="name" placeholder="Name"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
 
 @app.route("/modify")
 def modify():
     t, p, tp = request.args.get("task"), request.args.get("pid"), request.args.get("type")
-    # Syntax fix here
     return render_template_string("""<style>:root{--bg:#0f1014;--card:#16181f;--jio-blue:#0072ef}body{background:var(--bg);color:#fff;font-family:sans-serif}.card{background:var(--card);margin:50px auto;padding:30px;width:80%;border-radius:12px;text-align:center}.btn-danger{background:#e50914;color:#fff;padding:10px;border:none;border-radius:6px;width:100%;cursor:pointer}</style><div class="card"><h3>Admin: {{t|upper}}</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{% if t=='rename' %}<input name="new" placeholder="New Name" required style="width:90%;padding:10px;margin-bottom:10px;"><br>{% endif %}<input name="pw" type="password" placeholder="PIN" required style="width:90%;padding:10px;"><br><br><button class="btn-danger">CONFIRM</button></form></div>""", p=p, t=t, tp=tp)
 
 @app.route("/ai_home")

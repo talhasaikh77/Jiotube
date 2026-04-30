@@ -4,7 +4,7 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 app = Flask(__name__)
-app.secret_key = "jio_hotstar_ultra_v24_stable"
+app.secret_key = "jio_hotstar_ultra_v25_bg"
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30 
 
 MONGO_URI = "mongodb+srv://talhasaikh77_db_user:AtifAI12345@cluster0.udiyfhu.mongodb.net/Atif_AI_Database?retryWrites=true&w=majority"
@@ -18,6 +18,30 @@ except: print("DB Connection Error")
 
 ADMIN_PASSWORD = "809047"
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
+
+# Background Worker for PDF (Pure Silence)
+def full_bg_pdf(file_path, unique_name):
+    try:
+        # 1. Upload Original Raw to Cloudinary
+        up = cloudinary.uploader.upload(file_path, resource_type="raw", public_id="source", folder=f"pdf_data/{unique_name}")
+        # 2. Process Pages
+        doc = fitz.open(file_path)
+        for i in range(len(doc)):
+            pix = doc.load_page(i).get_pixmap(matrix=fitz.Matrix(2, 2))
+            img_p = f"p{i+1:03d}.jpg"
+            pix.save(img_p)
+            cloudinary.uploader.upload(img_p, public_id=f"p{i+1:03d}", folder=f"pdf_data/{unique_name}")
+            if os.path.exists(img_p): os.remove(img_p)
+        doc.close()
+        if os.path.exists(file_path): os.remove(file_path)
+    except Exception as e: print(f"Background Error: {e}")
+
+# Background Worker for Video
+def full_bg_video(file_path, v_id):
+    try:
+        cloudinary.uploader.upload(file_path, resource_type="video", public_id=v_id)
+        if os.path.exists(file_path): os.remove(file_path)
+    except: pass
 
 STYLE = """<style>
     :root { --jio-blue: #0072ef; --bg: #0f1014; --card: #16181f; --border: #252833; }
@@ -33,36 +57,23 @@ STYLE = """<style>
     .search-box button { background: var(--jio-blue); color:#fff; border:none; padding:0 20px; }
     .thumb { width:100%; height:200px; object-fit:cover; background:#000; }
     .action-bar { display:flex; gap:5px; padding:10px; flex-wrap: wrap; }
-    #progress-wrapper { display:none; padding:20px; }
-    #progress-bar { width: 0%; height: 10px; background: var(--jio-blue); border-radius: 5px; transition: width 0.3s; }
-    .up-status { font-size: 14px; margin-top: 10px; text-align: center; color: #fff; }
+    #progress-wrapper { display:none; padding:20px; text-align:center; }
+    #progress-bar { width: 0%; height: 8px; background: var(--jio-blue); border-radius: 4px; transition: width 0.2s; }
 </style>
 <script>
-function uploadFile(form, targetUrl) {
-    const formData = new FormData(form);
+function startUp(form, target) {
+    const fd = new FormData(form);
     const xhr = new XMLHttpRequest();
     document.getElementById('progress-wrapper').style.display = 'block';
     document.getElementById('upload-form').style.display = 'none';
-    
-    xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-            const percent = (e.loaded / e.total) * 100;
-            document.getElementById('progress-bar').style.width = percent + '%';
-            document.querySelector('.up-status').innerText = 'Server Receiving: ' + Math.round(percent) + '%';
-        }
+    xhr.upload.addEventListener('progress', e => {
+        const p = Math.round((e.loaded / e.total) * 100);
+        document.getElementById('progress-bar').style.width = p + '%';
+        document.getElementById('p-text').innerText = 'Sending to Server: ' + p + '%';
     });
-
-    xhr.onreadystatechange = () => {
-        if (xhr.readyState === 4 && xhr.status === 200) {
-            window.location.href = targetUrl;
-        } else if (xhr.readyState === 4) {
-            alert('Upload failed or timeout. Try smaller file.');
-            location.reload();
-        }
-    };
-    
+    xhr.onreadystatechange = () => { if (xhr.readyState === 4) window.location.href = target; };
     xhr.open('POST', form.action, true);
-    xhr.send(formData);
+    xhr.send(fd);
     return false;
 }
 </script>"""
@@ -88,6 +99,40 @@ def pdf_home():
     f_list = "".join([f'''<div class="card"><div style="padding:15px;"><b>{f["name"].split("__")[0].upper()}</b><div class="action-bar"><a href="/view_pdf?name={f["name"]}" class="btn btn-jio" style="flex:2;">OPEN</a><a href="/modify?task=rename&pid={f["name"]}&type=pdf" class="btn btn-ren">NAME</a><a href="/modify?task=delete&pid={f["name"]}&type=pdf" class="btn btn-danger">DEL</a></div></div></div>''' for f in folders if q in f["name"].lower()])
     return f'{STYLE}<div class="header"><a href="/" class="logo">JioPDF</a><a href="/upload_pdf_page" class="btn btn-jio">+ NEW BOOK</a></div><form class="search-box"><input name="q" placeholder="Search books..." value="{q}"><button>FIND</button></form>{f_list}'
 
+@app.route("/do_pdf_upload", methods=["POST"])
+def do_pdf_upload():
+    if request.form.get("pw") == ADMIN_PASSWORD:
+        f = request.files.get("file")
+        n = request.form.get("name").replace(" ","_")
+        if f:
+            u_n = f"{n}__{int(time.time())}"
+            temp_path = f"t_{u_n}.pdf"
+            f.save(temp_path)
+            threading.Thread(target=full_bg_pdf, args=(temp_path, u_n)).start()
+            return "OK"
+    return "Error", 400
+
+@app.route("/do_up", methods=["POST"])
+def do_up():
+    if request.form.get("pw") == ADMIN_PASSWORD:
+        f = request.files.get("file")
+        v = request.form.get("name").replace(" ","_")
+        if f:
+            t_p = f"t_{v}.mp4"
+            f.save(t_p)
+            threading.Thread(target=full_bg_video, args=(t_p, v)).start()
+            return "OK"
+    return "Error", 400
+
+@app.route("/admin_upload")
+def admin_upload():
+    return f'{STYLE}<div class="card" style="padding:20px;"><div id="progress-wrapper"><div id="progress-bar"></div><p id="p-text"></p></div><form id="upload-form" action="/do_up" method="POST" enctype="multipart/form-data" onsubmit="return startUp(this, \'/\')"><h3>Video</h3><input type="file" name="file" required><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
+
+@app.route("/upload_pdf_page")
+def upload_pdf_page():
+    return f'{STYLE}<div class="card" style="padding:20px;"><div id="progress-wrapper"><div id="progress-bar"></div><p id="p-text"></p></div><form id="upload-form" action="/do_pdf_upload" method="POST" enctype="multipart/form-data" onsubmit="return startUp(this, \'/pdf_home\')"><h3>PDF</h3><input type="file" name="file" required><br><input name="name" placeholder="Name"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
+
+# Baki saare routes (view_pdf, confirm, ai_home, etc.) pehle jaise hi raheinge
 @app.route("/view_pdf")
 def view_pdf():
     name = request.args.get("name"); next_c = request.args.get("next")
@@ -121,48 +166,6 @@ def confirm():
                 time.sleep(2); cloudinary.api.delete_folder(f"pdf_data/{p}")
             return redirect(url_for('pdf_home', _v=time.time()))
     return "Wrong PIN"
-
-def bg_pdf_process(pdf_url, folder_name):
-    try:
-        r = requests.get(pdf_url, timeout=60); p_path = f"tmp_{int(time.time())}.pdf"
-        with open(p_path, 'wb') as f: f.write(r.content)
-        doc = fitz.open(p_path)
-        for i in range(len(doc)):
-            pix = doc.load_page(i).get_pixmap(matrix=fitz.Matrix(2, 2))
-            img_p = f"p{i+1:03d}.jpg"; pix.save(img_p)
-            cloudinary.uploader.upload(img_p, public_id=f"p{i+1:03d}", folder=f"pdf_data/{folder_name}")
-            if os.path.exists(img_p): os.remove(img_p)
-        doc.close()
-        if os.path.exists(p_path): os.remove(p_path)
-    except: pass
-
-@app.route("/do_pdf_upload", methods=["POST"])
-def do_pdf_upload():
-    if request.form.get("pw") == ADMIN_PASSWORD:
-        f, n = request.files.get("file"), request.form.get("name").replace(" ","_")
-        if f:
-            unique_name = f"{n}__{int(time.time())}"
-            up = cloudinary.uploader.upload(f, resource_type="raw", public_id="source", folder=f"pdf_data/{unique_name}")
-            threading.Thread(target=bg_pdf_process, args=(up['secure_url'], unique_name)).start()
-            return "OK"
-    return "Error", 400
-
-@app.route("/do_up", methods=["POST"])
-def do_up():
-    if request.form.get("pw") == ADMIN_PASSWORD:
-        f, v = request.files.get("file"), request.form.get("name").replace(" ","_")
-        if f: 
-            cloudinary.uploader.upload(f, resource_type="video", public_id=v)
-            return "OK"
-    return "Error", 400
-
-@app.route("/admin_upload")
-def admin_upload():
-    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><div class="up-status">Preparing...</div></div><form id="upload-form" action="/do_up" method="POST" enctype="multipart/form-data" onsubmit="return uploadFile(this, \'/\')"><h3>Upload Video</h3><input type="file" name="file" required><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">START</button></form></div>'
-
-@app.route("/upload_pdf_page")
-def upload_pdf_page():
-    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><div class="up-status">Preparing...</div></div><form id="upload-form" action="/do_pdf_upload" method="POST" enctype="multipart/form-data" onsubmit="return uploadFile(this, \'/pdf_home\')"><h3>New Book</h3><input type="file" name="file" required><br><input name="name" placeholder="Name"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
 
 @app.route("/modify")
 def modify():

@@ -4,7 +4,8 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 app = Flask(__name__)
-app.secret_key = "jio_hotstar_ultra_v25_bg"
+app.secret_key = "jio_hotstar_ultra_v26_final"
+# Session ko 30 din tak save rakhne ke liye
 app.config['PERMANENT_SESSION_LIFETIME'] = 86400 * 30 
 
 MONGO_URI = "mongodb+srv://talhasaikh77_db_user:AtifAI12345@cluster0.udiyfhu.mongodb.net/Atif_AI_Database?retryWrites=true&w=majority"
@@ -19,24 +20,20 @@ except: print("DB Connection Error")
 ADMIN_PASSWORD = "809047"
 def hash_pw(p): return hashlib.sha256(p.encode()).hexdigest()
 
-# Background Worker for PDF (Pure Silence)
+# Background Processing Logic (No Changes)
 def full_bg_pdf(file_path, unique_name):
     try:
-        # 1. Upload Original Raw to Cloudinary
-        up = cloudinary.uploader.upload(file_path, resource_type="raw", public_id="source", folder=f"pdf_data/{unique_name}")
-        # 2. Process Pages
+        cloudinary.uploader.upload(file_path, resource_type="raw", public_id="source", folder=f"pdf_data/{unique_name}")
         doc = fitz.open(file_path)
         for i in range(len(doc)):
             pix = doc.load_page(i).get_pixmap(matrix=fitz.Matrix(2, 2))
-            img_p = f"p{i+1:03d}.jpg"
-            pix.save(img_p)
+            img_p = f"p{i+1:03d}.jpg"; pix.save(img_p)
             cloudinary.uploader.upload(img_p, public_id=f"p{i+1:03d}", folder=f"pdf_data/{unique_name}")
             if os.path.exists(img_p): os.remove(img_p)
         doc.close()
         if os.path.exists(file_path): os.remove(file_path)
-    except Exception as e: print(f"Background Error: {e}")
+    except: pass
 
-# Background Worker for Video
 def full_bg_video(file_path, v_id):
     try:
         cloudinary.uploader.upload(file_path, resource_type="video", public_id=v_id)
@@ -49,7 +46,7 @@ STYLE = """<style>
     .header { background: var(--bg); padding:15px; text-align:center; border-bottom: 1px solid var(--border); position:sticky; top:0; z-index:1000; display:flex; justify-content:space-between; align-items:center; }
     .logo { color: var(--jio-blue); font-weight: bold; font-size: 22px; text-decoration:none; }
     .card { background: var(--card); margin:12px; border-radius:12px; overflow:hidden; border: 1px solid var(--border); }
-    .btn { display:inline-block; padding:10px 15px; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; color:#fff; border:none; cursor:pointer; text-align:center; }
+    .btn { display:inline-block; padding:12px 15px; border-radius:6px; text-decoration:none; font-size:12px; font-weight:600; color:#fff; border:none; cursor:pointer; text-align:center; transition: 0.3s; }
     .btn-jio { background: var(--jio-blue); } .btn-outline { background:transparent; border:1px solid #fff; } .btn-danger { background:#e50914; } .btn-ren { background:#ff9900; }
     .btn-next { background: var(--border); width:90%; padding:15px; display:block; text-align:center; margin:15px auto; border-radius:10px; color:#fff; }
     .search-box { background: var(--border); display:flex; margin:12px; border-radius:8px; overflow:hidden; border: 1px solid #333; }
@@ -57,6 +54,7 @@ STYLE = """<style>
     .search-box button { background: var(--jio-blue); color:#fff; border:none; padding:0 20px; }
     .thumb { width:100%; height:200px; object-fit:cover; background:#000; }
     .action-bar { display:flex; gap:5px; padding:10px; flex-wrap: wrap; }
+    input[type="text"], input[type="password"], input[type="file"] { width:90%; padding:12px; margin:8px 0; border-radius:6px; border:1px solid var(--border); background:#1c1e26; color:#fff; }
     #progress-wrapper { display:none; padding:20px; text-align:center; }
     #progress-bar { width: 0%; height: 8px; background: var(--jio-blue); border-radius: 4px; transition: width 0.2s; }
 </style>
@@ -69,7 +67,6 @@ function startUp(form, target) {
     xhr.upload.addEventListener('progress', e => {
         const p = Math.round((e.loaded / e.total) * 100);
         document.getElementById('progress-bar').style.width = p + '%';
-        document.getElementById('p-text').innerText = 'Sending to Server: ' + p + '%';
     });
     xhr.onreadystatechange = () => { if (xhr.readyState === 4) window.location.href = target; };
     xhr.open('POST', form.action, true);
@@ -102,37 +99,62 @@ def pdf_home():
 @app.route("/do_pdf_upload", methods=["POST"])
 def do_pdf_upload():
     if request.form.get("pw") == ADMIN_PASSWORD:
-        f = request.files.get("file")
-        n = request.form.get("name").replace(" ","_")
+        f, n = request.files.get("file"), request.form.get("name").replace(" ","_")
         if f:
-            u_n = f"{n}__{int(time.time())}"
-            temp_path = f"t_{u_n}.pdf"
-            f.save(temp_path)
-            threading.Thread(target=full_bg_pdf, args=(temp_path, u_n)).start()
+            u_n = f"{n}__{int(time.time())}"; t_p = f"t_{u_n}.pdf"; f.save(t_p)
+            threading.Thread(target=full_bg_pdf, args=(t_p, u_n)).start()
             return "OK"
     return "Error", 400
 
 @app.route("/do_up", methods=["POST"])
 def do_up():
     if request.form.get("pw") == ADMIN_PASSWORD:
-        f = request.files.get("file")
-        v = request.form.get("name").replace(" ","_")
+        f, v = request.files.get("file"), request.form.get("name").replace(" ","_")
         if f:
-            t_p = f"t_{v}.mp4"
-            f.save(t_p)
+            t_p = f"t_{v}.mp4"; f.save(t_p)
             threading.Thread(target=full_bg_video, args=(t_p, v)).start()
             return "OK"
     return "Error", 400
 
 @app.route("/admin_upload")
 def admin_upload():
-    return f'{STYLE}<div class="card" style="padding:20px;"><div id="progress-wrapper"><div id="progress-bar"></div><p id="p-text"></p></div><form id="upload-form" action="/do_up" method="POST" enctype="multipart/form-data" onsubmit="return startUp(this, \'/\')"><h3>Video</h3><input type="file" name="file" required><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
+    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><p>Sending to Server...</p></div><form id="upload-form" action="/do_up" method="POST" enctype="multipart/form-data" onsubmit="return startUp(this, \'/\')"><h3>Upload Video</h3><input type="file" name="file" required><br><input name="name" placeholder="Title"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
 
 @app.route("/upload_pdf_page")
 def upload_pdf_page():
-    return f'{STYLE}<div class="card" style="padding:20px;"><div id="progress-wrapper"><div id="progress-bar"></div><p id="p-text"></p></div><form id="upload-form" action="/do_pdf_upload" method="POST" enctype="multipart/form-data" onsubmit="return startUp(this, \'/pdf_home\')"><h3>PDF</h3><input type="file" name="file" required><br><input name="name" placeholder="Name"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
+    return f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><div id="progress-wrapper"><div id="progress-bar"></div><p>Sending to Server...</p></div><form id="upload-form" action="/do_pdf_upload" method="POST" enctype="multipart/form-data" onsubmit="return startUp(this, \'/pdf_home\')"><h3>New Book</h3><input type="file" name="file" required><br><input name="name" placeholder="Name"><br><input name="pw" type="password" placeholder="PIN"><br><button class="btn btn-jio">UPLOAD</button></form></div>'
 
-# Baki saare routes (view_pdf, confirm, ai_home, etc.) pehle jaise hi raheinge
+@app.route("/ai_home")
+def ai_home():
+    if 'u' not in session: return redirect(url_for('ai_auth'))
+    history = list(ai_col.find({"u": session['u']}).sort("t", -1).limit(20))
+    h_html = "".join([f'<div class="card"><img src="{i["url"]}" style="width:100%;"><div class="action-bar"><a href="{i["url"]}" download class="btn btn-jio" style="flex:1;">SAVE</a><a href="/ai_del?id={str(i["_id"])}" class="btn btn-danger">DEL</a></div></div>' for i in history])
+    return f'{STYLE}<div class="header"><a href="/" class="logo">JioAI</a><a href="/logout" class="btn btn-danger">LOGOUT</a></div><div class="card" style="padding:20px;text-align:center;"><form action="/enhance" method="POST" enctype="multipart/form-data"><h3>Scan Image</h3><input type="file" name="file" required><br><button class="btn btn-jio" style="width:90%;margin-top:10px;">ENHANCE NOW</button></form></div>{h_html}'
+
+@app.route("/ai_auth", methods=["GET", "POST"])
+def ai_auth():
+    if request.method == "POST":
+        m, p, act = request.form.get("m"), request.form.get("pw"), request.form.get("act")
+        if act == "reg":
+            if not users_col.find_one({"m": m}): users_col.insert_one({"m": m, "p": hash_pw(p)})
+            return render_template_string(f'{STYLE}<div class="card" style="padding:20px;text-align:center;"><h3>Success!</h3><p>Account Created. Now Login.</p><a href="/ai_auth" class="btn btn-jio">GO TO LOGIN</a></div>')
+        u = users_col.find_one({"m": m})
+        if u and u['p'] == hash_pw(p):
+            session.permanent = True
+            session['u'] = str(u['_id'])
+            return redirect(url_for('ai_home'))
+    return f'{STYLE}<body style="display:flex;align-items:center;justify-content:center;height:100vh;"><div class="card" style="width:85%;padding:30px;text-align:center;"><h2>JioAI</h2><form method="POST"><input name="m" placeholder="Mobile / Username" required><br><input name="pw" type="password" placeholder="Password" required><br><br><button name="act" value="log" class="btn btn-jio" style="width:48%;">LOGIN</button> <button name="act" value="reg" class="btn btn-outline" style="width:48%;color:#0072ef;border-color:#0072ef;">SIGN UP</button></form></div></body>'
+
+@app.route("/enhance", methods=["POST"])
+def enhance():
+    if 'u' not in session: return redirect(url_for('ai_auth'))
+    f = request.files.get("file")
+    if f:
+        up = cloudinary.uploader.upload(f, folder="ai_enhanced", transformation=[{"width": 1800, "crop": "limit"}, {"effect": "improve"}])
+        ai_col.insert_one({"u": session['u'], "url": up['secure_url'], "t": time.time()})
+    return redirect(url_for('ai_home'))
+
+# View PDF, Confirm, Modify, Logout (Re-using from V25)
 @app.route("/view_pdf")
 def view_pdf():
     name = request.args.get("name"); next_c = request.args.get("next")
@@ -158,8 +180,7 @@ def confirm():
                 new_n = request.form.get("new").replace(" ","_") + "__" + str(int(time.time()))
                 res = cloudinary.api.resources(prefix=f"pdf_data/{p}/", max_results=500)
                 for r in res.get("resources", []):
-                    old_id = r['public_id']
-                    new_id = old_id.replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/")
+                    old_id = r['public_id']; new_id = old_id.replace(f"pdf_data/{p}/", f"pdf_data/{new_n}/")
                     cloudinary.uploader.rename(old_id, new_id, invalidate=True)
             elif t == "delete":
                 cloudinary.api.delete_resources_by_prefix(f"pdf_data/{p}/", invalidate=True)
@@ -171,33 +192,6 @@ def confirm():
 def modify():
     t, p, tp = request.args.get("task"), request.args.get("pid"), request.args.get("type")
     return render_template_string("""<style>:root{--bg:#0f1014;--card:#16181f;--jio-blue:#0072ef}body{background:var(--bg);color:#fff;font-family:sans-serif}.card{background:var(--card);margin:50px auto;padding:30px;width:80%;border-radius:12px;text-align:center}.btn-danger{background:#e50914;color:#fff;padding:10px;border:none;border-radius:6px;width:100%;cursor:pointer}</style><div class="card"><h3>Admin: {{t|upper}}</h3><form action="/confirm" method="POST"><input type="hidden" name="pid" value="{{p}}"><input type="hidden" name="task" value="{{t}}"><input type="hidden" name="type" value="{{tp}}">{% if t=='rename' %}<input name="new" placeholder="New Name" required style="width:90%;padding:10px;margin-bottom:10px;"><br>{% endif %}<input name="pw" type="password" placeholder="PIN" required style="width:90%;padding:10px;"><br><br><button class="btn-danger">CONFIRM</button></form></div>""", p=p, t=t, tp=tp)
-
-@app.route("/ai_home")
-def ai_home():
-    if 'u' not in session: return redirect(url_for('ai_auth'))
-    history = list(ai_col.find({"u": session['u']}).sort("t", -1).limit(20))
-    h_html = "".join([f'<div class="card"><img src="{i["url"]}" style="width:100%;"><div class="action-bar"><a href="{i["url"]}" download class="btn btn-jio" style="flex:1;">SAVE</a><a href="/ai_del?id={str(i["_id"])}" class="btn btn-danger">DEL</a></div></div>' for i in history])
-    return f'{STYLE}<div class="header"><a href="/" class="logo">JioAI</a><a href="/logout" class="btn btn-danger">LOGOUT</a></div><div class="card" style="padding:20px;text-align:center;"><form action="/enhance" method="POST" enctype="multipart/form-data"><h3>Scan Image</h3><input type="file" name="file" required><br><button class="btn btn-jio" style="width:90%;margin-top:10px;">ENHANCE NOW</button></form></div>{h_html}'
-
-@app.route("/ai_auth", methods=["GET", "POST"])
-def ai_auth():
-    if request.method == "POST":
-        m, p, act = request.form.get("m"), request.form.get("pw"), request.form.get("act")
-        if act == "reg":
-            if not users_col.find_one({"m": m}): users_col.insert_one({"m": m, "p": hash_pw(p)})
-        u = users_col.find_one({"m": m})
-        if u and u['p'] == hash_pw(p):
-            session.permanent = True; session['u'] = str(u['_id']); return redirect(url_for('ai_home'))
-    return f'{STYLE}<body style="display:flex;align-items:center;justify-content:center;height:100vh;"><div class="card" style="width:85%;padding:30px;text-align:center;"><h2>JioAI</h2><form method="POST"><input name="m" placeholder="Mobile" required style="width:90%;padding:10px;margin:5px;"><br><input name="pw" type="password" placeholder="Pass" required style="width:90%;padding:10px;margin:5px;"><br><br><button name="act" value="log" class="btn btn-jio" style="width:100%;">LOGIN</button></form></div></body>'
-
-@app.route("/enhance", methods=["POST"])
-def enhance():
-    if 'u' not in session: return redirect(url_for('ai_auth'))
-    f = request.files.get("file")
-    if f:
-        up = cloudinary.uploader.upload(f, folder="ai_enhanced", transformation=[{"width": 1800, "crop": "limit"}, {"effect": "improve"}])
-        ai_col.insert_one({"u": session['u'], "url": up['secure_url'], "t": time.time()})
-    return redirect(url_for('ai_home'))
 
 @app.route("/ai_del")
 def ai_del():

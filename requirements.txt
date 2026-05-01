@@ -2,7 +2,6 @@ Flask==3.0.0
 pymongo[srv]
 cloudinary
 google-generativeai
-PyMuPDF
 requests
 certifi
 gunicorn

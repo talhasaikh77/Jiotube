@@ -1,7 +1,7 @@
 Flask
 pymongo
 cloudinary
-pymupdf
+google-generativeai
+PyMuPDF
 requests
 certifi
-gunicorn

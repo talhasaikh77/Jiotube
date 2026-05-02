@@ -5,9 +5,9 @@ from pymongo import MongoClient
 import requests
 
 app = Flask(__name__)
-app.secret_key = "jiotube_v77_pro_bot"
+app.secret_key = "jiotube_v78_ultra"
 
-# --- Gemini & MongoDB Setup ---
+# --- API Setup ---
 genai.configure(api_key="AIzaSyDtsD6jEyPXykeTsJvfkB9kk4YEqxf-mFk")
 model = genai.GenerativeModel('gemini-1.5-flash')
 
@@ -16,17 +16,16 @@ cloudinary.config(cloud_name="dawterffe", api_key="258318685843824", api_secret=
 
 client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
 db = client.get_database('Atif_AI_Database')
-chat_col = db['chat_history']
 user_col = db['users']
 
 STYLE = """<style>
-    :root { --jio: #0072ef; }
+    :root { --jio: #0072ef; --yt: #ff0000; }
     body { margin:0; font-family: sans-serif; background: #f0f2f5; padding-bottom: 80px; }
     .header { background: var(--jio); padding:15px; display:flex; justify-content:space-between; align-items:center; color:#fff; position:sticky; top:0; z-index:1000; }
     .card { background: #fff; margin:12px; border-radius:10px; overflow:hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.1); border: 1px solid #ddd; }
     .btn { padding:10px; border-radius:6px; text-decoration:none; color:#fff; font-size:12px; text-align:center; font-weight:bold; border:none; display:block; cursor:pointer; }
     .btn-jio { background: var(--jio); }
-    .btn-nav { background: rgba(255,255,255,0.2); border: 1px solid #fff; padding: 5px 8px; }
+    .btn-yt { background: var(--yt); }
     input { width:100%; padding:12px; margin:5px 0; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; }
 </style>"""
 
@@ -35,73 +34,83 @@ def index():
     if 'u' not in session: return redirect("/login")
     q = request.args.get("q", "").strip().lower()
     try:
-        res = cloudinary.api.resources(resource_type="video", type="upload", max_results=10)
+        res = cloudinary.api.resources(resource_type="video", type="upload", max_results=20)
         vids = [v for v in res.get("resources", []) if q in v["public_id"].lower()]
     except: vids = []
     
     v_html = "".join([f'''<div class="card">
-        <img src="{v["secure_url"].rsplit(".", 1)[0]}.jpg" style="width:100%; height:180px; object-fit:cover;">
-        <div style="padding:10px;"><b>{v["public_id"]}</b></div>
-        <div style="padding:10px;">
-            <a href="{v["secure_url"]}" class="btn btn-jio">WATCH VIDEO</a>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-top:8px;">
-                <a href="/modify?t=rename&p={v["public_id"]}" class="btn" style="background:#f39c12;">RENAME</a>
-                <a href="/modify?t=delete&p={v["public_id"]}" class="btn" style="background:#d9534f;">DELETE</a>
-            </div>
+        <div style="padding:10px;"><b>{v["public_id"].replace("yt_vids/", "")}</b></div>
+        <div style="padding:10px; display:flex; gap:5px;">
+            <a href="{v["secure_url"]}" class="btn btn-jio" style="flex:2;">WATCH</a>
+            <a href="/rename_page?old={v["public_id"]}" class="btn" style="background:#f39c12; flex:1;">RENAME</a>
+            <a href="/delete_confirm?p={v["public_id"]}" class="btn" style="background:#d9534f; flex:1;">DEL</a>
         </div>
     </div>''' for v in vids])
 
     return f'''{STYLE}
-    <div class="header">
-        <b>JioTube</b>
-        <div style="display:flex; gap:4px;">
-            <a href="/yt_search" class="btn btn-nav" style="background:red;">YOUTUBE</a>
-            <a href="/pdf_home" class="btn btn-nav">PDF</a>
-            <a href="/ai_chatter" class="btn btn-nav">AI</a>
-        </div>
-    </div>
+    <div class="header"><b>JioTube</b><div style="display:flex; gap:4px;"><a href="/yt_search" class="btn btn-yt">YOUTUBE</a><a href="/ai_chatter" class="btn btn-jio">AI</a></div></div>
     <form style="padding:10px; display:flex; gap:5px;"><input name="q" placeholder="Search saved videos..." value="{q}"><button class="btn btn-jio">GO</button></form>
-    {v_html}'''
+    {v_html if vids else '<p style="text-align:center; color:gray;">Koi video nahi mili.</p>'}'''
 
 @app.route("/yt_search", methods=["GET", "POST"])
 def yt_search():
     if 'u' not in session: return redirect("/login")
-    msg = ""
+    results_html = ""
     if request.method == "POST":
         v_name = request.form.get("v_name")
-        msg = f"'{v_name}' search kiya ja raha hai... DDG Proxy ke zariye Cloudinary par upload ho jayega (Background)."
-        # Yahan hum residential proxy header simulation lagayenge
-    return f'''{STYLE}<div class="header"><a href="/" class="btn btn-nav">BACK</a><b>YouTube Bot</b></div>
-    <div class="card" style="padding:20px;">
-        <p style="font-size:13px; color:#666;">Video ka naam likhein, hum DuckDuckGo se nikaal kar use 144p low resolution mein save kar denge.</p>
-        <form method="POST">
-            <input name="v_name" placeholder="Video name (e.g. Arijit Singh Songs)" required>
-            <button class="btn btn-jio" style="width:100%; margin-top:10px; background:red;">SEARCH & UPLOAD</button>
-        </form>
-        <p style="color:green; font-size:12px; margin-top:10px;">{msg}</p>
+        # Yahan DDG ka logic: User ko result dikhane ke liye
+        results_html = f'''<div class="card" style="padding:15px;">
+            <p>Searching for: <b>{v_name}</b></p>
+            <div style="border:1px solid #eee; padding:10px; border-radius:8px;">
+                <img src="https://via.placeholder.com/150x80?text=Video+Thumbnail" style="width:100%; border-radius:5px;">
+                <p style="font-size:14px; margin:5px 0;">Sample Video Result from DuckDuckGo</p>
+                <a href="/start_download?n={v_name}" class="btn btn-yt">DOWNLOAD LOW RES (144p)</a>
+            </div>
+        </div>'''
+    return f'''{STYLE}<div class="header"><a href="/" class="btn btn-jio" style="background:rgba(255,255,255,0.2);">BACK</a><b>YouTube Search</b></div>
+    <div style="padding:10px;">
+        <form method="POST"><input name="v_name" placeholder="Enter video name..." required><button class="btn btn-yt" style="width:100%; margin-top:5px;">FIND VIDEO</button></form>
+        {results_html}
     </div>'''
 
-@app.route("/ai_chatter", methods=["GET", "POST"])
-def ai_chatter():
-    if 'u' not in session: return redirect("/login")
-    if request.method == "POST":
-        p = request.form.get("q")
-        try:
-            res = model.generate_content(p)
-            chat_col.insert_one({"u": session['u'], "q": p, "a": res.text, "t": time.time()})
-        except: pass # Internal server fix
-        return redirect("/ai_chatter")
-    chats = list(chat_col.find({"u": session['u']}).sort("t", 1))
-    c_html = "".join([f'<div style="background:#dcf8c6; margin:10px; padding:12px; border-radius:12px; margin-left:auto; max-width:80%;">{c["q"]}</div><div style="background:#fff; margin:10px; padding:12px; border-radius:12px; border:1px solid #ddd; max-width:80%;"><b>Joya:</b> {c["a"]}</div>' for c in chats])
-    return f'''{STYLE}<div class="header"><a href="/" class="btn btn-nav">HOME</a><b>Joya AI</b></div><div style="padding-bottom:100px;">{c_html}</div><form method="POST" style="position:fixed; bottom:0; width:100%; display:flex; padding:10px; background:#fff; gap:5px;"><input name="q" placeholder="Puchhein..." required><button class="btn btn-jio">SEND</button></form>'''
+@app.route("/delete_confirm")
+def delete_confirm():
+    p = request.args.get("p")
+    return f'''{STYLE}<div class="card" style="padding:20px; text-align:center;">
+        <h3>Delete Video?</h3>
+        <p>Video: {p}</p>
+        <form action="/modify" method="GET">
+            <input type="hidden" name="t" value="delete">
+            <input type="hidden" name="p" value="{p}">
+            <input name="pass" type="password" placeholder="Enter Admin Password" required>
+            <button class="btn" style="background:#d9534f; width:100%; margin-top:10px;">CONFIRM DELETE</button>
+        </form>
+    </div>'''
+
+@app.route("/rename_page")
+def rename_page():
+    old = request.args.get("old")
+    return f'''{STYLE}<div class="card" style="padding:20px;">
+        <h3>Rename Video</h3>
+        <form action="/modify" method="GET">
+            <input type="hidden" name="t" value="rename">
+            <input type="hidden" name="p" value="{old}">
+            <input name="new_name" placeholder="New Name" required>
+            <button class="btn btn-jio" style="width:100%; margin-top:10px;">SAVE NAME</button>
+        </form>
+    </div>'''
 
 @app.route("/modify")
 def modify():
     if 'u' not in session: return redirect("/login")
-    t = request.args.get("t")
-    p = request.args.get("p")
+    t, p = request.args.get("t"), request.args.get("p")
     try:
-        if t == "delete": cloudinary.uploader.destroy(p, resource_type="video")
+        if t == "delete":
+            if request.args.get("pass") == "AtifAI12345": # Security Check
+                cloudinary.uploader.destroy(p, resource_type="video")
+        elif t == "rename":
+            new_n = request.args.get("new_name")
+            cloudinary.uploader.rename(p, f"yt_vids/{new_n}", resource_type="video")
     except: pass
     return redirect("/")
 
@@ -111,21 +120,6 @@ def login():
         p, pw = request.form.get("p"), request.form.get("pw")
         if user_col.find_one({"p": p, "pw": pw}): session['u'] = p; return redirect("/")
     return f'{STYLE}<div class="card" style="margin:60px 20px; padding:20px;"><h3>Login</h3><form method="POST"><input name="p" placeholder="Mobile"><input name="pw" type="password" placeholder="Pass"><button class="btn btn-jio">LOGIN</button></form></div>'
-
-@app.route("/pdf_home")
-def pdf_home():
-    try: folds = cloudinary.api.subfolders("pdf_data")["folders"]
-    except: folds = []
-    f_html = "".join([f'<div class="card" style="padding:15px; display:flex; justify-content:space-between;"><b>{f["name"].upper()}</b><a href="/view_pdf?name={f["name"]}" class="btn btn-jio">OPEN</a></div>' for f in folds])
-    return f'{STYLE}<div class="header"><a href="/" class="btn btn-nav">HOME</a><b>Books</b></div>{f_html}'
-
-@app.route("/view_pdf")
-def view_pdf():
-    n = request.args.get("name")
-    res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{n}/", max_results=100)
-    pgs = sorted(res.get("resources", []), key=lambda x: x["public_id"])
-    h = "".join([f'<img src="{p["secure_url"]}" style="width:100%;">' for p in pgs])
-    return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-nav">←</a><b>{n}</b></div>{h}'
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

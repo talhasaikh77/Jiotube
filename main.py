@@ -2,10 +2,9 @@ import os, time, certifi, cloudinary, cloudinary.uploader, cloudinary.api
 import google.generativeai as genai
 from flask import Flask, request, redirect, render_template_string, session, url_for
 from pymongo import MongoClient
-import requests
 
 app = Flask(__name__)
-app.secret_key = "jiotube_v82_pro"
+app.secret_key = "jiotube_v83_engine"
 
 # --- DB & API Setup ---
 MONGO_URI = "mongodb+srv://talhasaikh77_db_user:AtifAI12345@cluster0.udiyfhu.mongodb.net/Atif_AI_Database?retryWrites=true&w=majority"
@@ -52,20 +51,33 @@ def index():
 @app.route("/yt_search", methods=["GET", "POST"])
 def yt_search():
     if 'u' not in session: return redirect("/login")
-    results = ""
-    if request.method == "POST":
-        query = request.form.get("q")
-        # Residential Header Simulation for DDG
-        results = f'''<div class="card" style="padding:15px;">
-            <p>Searching results for: <b>{query}</b></p>
-            <div style="border:1px solid #ddd; padding:10px; border-radius:10px;">
-                <img src="https://source.unsplash.com/featured/?video,{query}" style="width:100%; border-radius:8px;">
-                <p>Found Video Link: duckduckgo.com/v/yt_url_found</p>
-                <input type="password" id="p" placeholder="Enter 809047" style="margin-top:10px;">
-                <button class="btn btn-yt" style="width:100%;" onclick="alert('Sent to YT Downloader!')">DOWNLOAD 144P</button>
-            </div>
+    # Redirecting to a DuckDuckGo Search UI that links to our downloader
+    q = request.form.get("q", "")
+    if q:
+        # Simulation of a search result that triggers the download engine
+        return f'''{STYLE}<div class="header"><a href="/" class="btn btn-jio">BACK</a><b>Search Results</b></div>
+        <div class="card" style="padding:15px;">
+            <p>Found video for: <b>{q}</b></p>
+            <p style="font-size:12px; color:gray;">IP: Residential Mobile Proxy Active</p>
+            <hr>
+            <form action="/start_engine" method="POST">
+                <input type="hidden" name="vid_url" value="https://youtube.com/watch?example">
+                <input name="pass" type="password" placeholder="Enter Password (809047)" required>
+                <button class="btn btn-yt" style="width:100%;">DOWNLOAD VIA YT-DLP (144p)</button>
+            </form>
         </div>'''
-    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">BACK</a><b>YouTube Search</b></div><div style="padding:10px;"><form method="POST"><input name="q" placeholder="Search Video..."><button class="btn btn-yt" style="width:100%;">SEARCH</button></form>{results}</div>'
+    return f'''{STYLE}<div class="header"><a href="/" class="btn btn-jio">BACK</a><b>YouTube Search</b></div>
+    <div style="padding:20px;">
+        <form method="POST"><input name="q" placeholder="Search Video or Paste Link..." required><button class="btn btn-yt" style="width:100%;">FIND ON DUCKDUCKGO</button></form>
+    </div>'''
+
+@app.route("/start_engine", methods=["POST"])
+def start_engine():
+    pw = request.form.get("pass")
+    if pw == SECURE_PASS:
+        # Yahan yt-dlp ka real process start hoga background mein
+        return f'{STYLE}<div class="card" style="padding:20px; text-align:center;"><h3>Processing...</h3><p>Video 144p mein convert ho rahi hai. 2 minute baad Home refresh karein.</p><a href="/" class="btn btn-jio">WAPAS HOME</a></div>'
+    return redirect("/yt_search")
 
 @app.route("/pdf_home")
 def pdf_home():

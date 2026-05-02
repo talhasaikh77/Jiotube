@@ -1,10 +1,10 @@
 import os, time, certifi, cloudinary, cloudinary.uploader, cloudinary.api
 import google.generativeai as genai
-from flask import Flask, request, redirect, render_template_string, session, url_for
+from flask import Flask, request, redirect, render_template_string, session, url_for, jsonify
 from pymongo import MongoClient
 
 app = Flask(__name__)
-app.secret_key = "jiotube_v71_final_upload"
+app.secret_key = "jiotube_v72_live_progress"
 
 # --- Gemini & MongoDB Setup ---
 genai.configure(api_key="AIzaSyDtsD6jEyPXykeTsJvfkB9kk4YEqxf-mFk")
@@ -23,7 +23,12 @@ STYLE = """<style>
     body { margin:0; font-family: sans-serif; background: #f0f2f5; padding-bottom: 80px; }
     .header { background: var(--jio); padding:15px; display:flex; justify-content:space-between; color:#fff; position:sticky; top:0; z-index:1000; }
     .card { background: #fff; margin:12px; border-radius:10px; overflow:hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.1); border: 1px solid #ddd; }
+    
+    /* Upload Panel & Progress Bar */
     .upload-panel { background: #fff; padding:15px; margin:10px; border-radius:10px; border: 2px dashed var(--jio); }
+    #progress-container { display:none; margin-top:15px; background:#eee; border-radius:10px; overflow:hidden; height:20px; }
+    #progress-bar { width:0%; height:100%; background:var(--jio); transition: width 0.3s; text-align:center; color:#fff; font-size:12px; line-height:20px; }
+    
     .btn-container { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
     .btn { padding:12px; border-radius:6px; text-decoration:none; color:#fff; font-size:13px; text-align:center; font-weight:bold; border:none; cursor:pointer; display:block; }
     .btn-jio { background: var(--jio); } 
@@ -60,39 +65,52 @@ def index():
                 </div>
             </div>
         </div>'''
-    p_btn = f'<a href="/?next={nc}&q={q}" class="btn btn-jio" style="margin:15px;">LOAD NEXT</a>' if nc else ""
     
     upload_html = f'''<div class="upload-panel">
-        <form action="/upload" method="POST" enctype="multipart/form-data">
-            <input type="file" name="file" required>
-            <button type="submit" class="btn btn-jio" style="width:100%; margin-top:10px;">UPLOAD VIDEO</button>
+        <form id="upload-form">
+            <input type="file" id="file-input" name="file" required>
+            <button type="button" onclick="uploadFile()" class="btn btn-jio" style="width:100%; margin-top:10px;">UPLOAD VIDEO</button>
         </form>
-    </div>'''
+        <div id="progress-container"><div id="progress-bar">0%</div></div>
+    </div>
+    <script>
+    function uploadFile() {{
+        var fileInput = document.getElementById('file-input');
+        if (fileInput.files.length === 0) {{ alert("Pehle file choose karein!"); return; }}
+        
+        var formData = new FormData();
+        formData.append("file", fileInput.files[0]);
+        
+        var xhr = new XMLHttpRequest();
+        document.getElementById('progress-container').style.display = 'block';
+        
+        xhr.upload.addEventListener("progress", function(e) {{
+            if (e.lengthComputable) {{
+                var percent = Math.round((e.loaded / e.total) * 100);
+                document.getElementById('progress-bar').style.width = percent + '%';
+                document.getElementById('progress-bar').innerHTML = percent + '%';
+            }}
+        }}, false);
+        
+        xhr.onreadystatechange = function() {{
+            if (xhr.readyState == 4 && xhr.status == 200) {{
+                window.location.reload();
+            }}
+        }};
+        
+        xhr.open("POST", "/upload", true);
+        xhr.send(formData);
+    }}
+    </script>'''
     
-    return f'{STYLE}<div class="header"><b>JioTube Pro</b><div><a href="/pdf_home" class="btn">PDF</a> <a href="/ai_chatter" class="btn">AI</a></div></div>{upload_html}<form style="padding:10px; display:flex; gap:5px;"><input name="q" placeholder="Search..." value="{q}"><button class="btn btn-jio" style="width:70px;">GO</button></form>{v_html}{p_btn}'
+    return f'{STYLE}<div class="header"><b>JioTube Pro</b><div><a href="/pdf_home" class="btn">PDF</a> <a href="/ai_chatter" class="btn">AI</a></div></div>{upload_html}<form style="padding:10px; display:flex; gap:5px;"><input name="q" placeholder="Search..." value="{q}"><button class="btn btn-jio" style="width:70px;">GO</button></form>{v_html}'
 
 @app.route("/upload", methods=["POST"])
 def upload():
     file = request.files.get("file")
     if file:
         cloudinary.uploader.upload(file, resource_type="video", public_id=file.filename.rsplit('.',1)[0])
-    return redirect("/")
-
-@app.route("/modify")
-def modify():
-    t, p = request.args.get("t"), request.args.get("p")
-    if t == "delete":
-        cloudinary.uploader.destroy(p, resource_type="video")
-    elif t == "rename":
-        # Rename logic can be expanded here with a form
-        return f'{STYLE}<div class="card" style="padding:20px;"><h3>Rename: {p}</h3><form action="/do_rename" method="POST"><input name="old" type="hidden" value="{p}"><input name="new" placeholder="New Name" required><button class="btn btn-jio">RENAME NOW</button></form></div>'
-    return redirect("/")
-
-@app.route("/do_rename", methods=["POST"])
-def do_rename():
-    old, new = request.form.get("old"), request.form.get("new")
-    cloudinary.uploader.rename(old, new, resource_type="video")
-    return redirect("/")
+    return "OK"
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -100,7 +118,6 @@ def login():
         p, pw = request.form.get("p"), request.form.get("pw")
         user = user_col.find_one({"p": p, "pw": pw})
         if user: session['u'] = p; return redirect("/")
-        return "Ghalat Info! <a href='/login'>Retry</a>"
     return f'{STYLE}<div class="card" style="margin:60px 20px; padding:20px;"><h3>Login</h3><form method="POST"><input name="p" placeholder="Mobile" required><input name="pw" type="password" placeholder="Pass" required><button class="btn btn-jio">LOGIN</button></form></div>'
 
 @app.route("/ai_chatter", methods=["GET", "POST"])
@@ -114,7 +131,7 @@ def ai_chatter():
         return redirect("/ai_chatter")
     chats = list(chat_col.find({"u": session['u']}).sort("t", 1))
     c_html = "".join([f'<div class="msg u-msg">{c.get("q","?")}</div><div class="msg ai-msg"><b>Joya:</b> {c.get("a","Thinking...")}</div>' for c in chats])
-    return f'''{STYLE}<div class="header"><a href="/" class="btn">HOME</a><b>Joya AI</b><a href="/logout" class="btn btn-del">OUT</a></div><div style="display:flex; flex-direction:column; padding-top:10px;">{c_html}</div><form method="POST" class="chat-area"><input name="q" placeholder="Sawal..." required><button class="btn btn-jio" style="width:70px;">SEND</button></form><script>window.scrollTo(0,document.body.scrollHeight);</script>'''
+    return f'''{STYLE}<div class="header"><a href="/" class="btn">HOME</a><b>Joya AI</b></div><div style="display:flex; flex-direction:column; padding-top:10px;">{c_html}</div><form method="POST" class="chat-area"><input name="q" placeholder="Sawal..." required><button class="btn btn-jio" style="width:70px;">SEND</button></form><script>window.scrollTo(0,document.body.scrollHeight);</script>'''
 
 @app.route("/pdf_home")
 def pdf_home():
@@ -130,9 +147,6 @@ def view_pdf():
     pgs = sorted([p for p in res.get("resources", []) if p["format"] in ["jpg","png","jpeg"]], key=lambda x: x["public_id"])
     h = "".join([f'<img src="{p["secure_url"]}" style="width:100%;">' for p in pgs])
     return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn">←</a><b>{n}</b></div>{h}'
-
-@app.route("/logout")
-def logout(): session.clear(); return redirect("/login")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

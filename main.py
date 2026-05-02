@@ -5,7 +5,7 @@ from pymongo import MongoClient
 import requests
 
 app = Flask(__name__)
-app.secret_key = "jiotube_v78_ultra"
+app.secret_key = "jiotube_v79_secure"
 
 # --- API Setup ---
 genai.configure(api_key="AIzaSyDtsD6jEyPXykeTsJvfkB9kk4YEqxf-mFk")
@@ -17,6 +17,9 @@ cloudinary.config(cloud_name="dawterffe", api_key="258318685843824", api_secret=
 client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
 db = client.get_database('Atif_AI_Database')
 user_col = db['users']
+
+# Global Password
+SECURE_PASS = "809047"
 
 STYLE = """<style>
     :root { --jio: #0072ef; --yt: #ff0000; }
@@ -39,7 +42,7 @@ def index():
     except: vids = []
     
     v_html = "".join([f'''<div class="card">
-        <div style="padding:10px;"><b>{v["public_id"].replace("yt_vids/", "")}</b></div>
+        <div style="padding:10px;"><b>{v["public_id"]}</b></div>
         <div style="padding:10px; display:flex; gap:5px;">
             <a href="{v["secure_url"]}" class="btn btn-jio" style="flex:2;">WATCH</a>
             <a href="/rename_page?old={v["public_id"]}" class="btn" style="background:#f39c12; flex:1;">RENAME</a>
@@ -49,68 +52,64 @@ def index():
 
     return f'''{STYLE}
     <div class="header"><b>JioTube</b><div style="display:flex; gap:4px;"><a href="/yt_search" class="btn btn-yt">YOUTUBE</a><a href="/ai_chatter" class="btn btn-jio">AI</a></div></div>
-    <form style="padding:10px; display:flex; gap:5px;"><input name="q" placeholder="Search saved videos..." value="{q}"><button class="btn btn-jio">GO</button></form>
-    {v_html if vids else '<p style="text-align:center; color:gray;">Koi video nahi mili.</p>'}'''
+    {v_html if vids else '<p style="text-align:center; color:gray; padding:20px;">No videos found.</p>'}'''
 
 @app.route("/yt_search", methods=["GET", "POST"])
 def yt_search():
     if 'u' not in session: return redirect("/login")
-    results_html = ""
+    msg = ""
     if request.method == "POST":
-        v_name = request.form.get("v_name")
-        # Yahan DDG ka logic: User ko result dikhane ke liye
-        results_html = f'''<div class="card" style="padding:15px;">
-            <p>Searching for: <b>{v_name}</b></p>
-            <div style="border:1px solid #eee; padding:10px; border-radius:8px;">
-                <img src="https://via.placeholder.com/150x80?text=Video+Thumbnail" style="width:100%; border-radius:5px;">
-                <p style="font-size:14px; margin:5px 0;">Sample Video Result from DuckDuckGo</p>
-                <a href="/start_download?n={v_name}" class="btn btn-yt">DOWNLOAD LOW RES (144p)</a>
-            </div>
-        </div>'''
+        if request.form.get("pass") == SECURE_PASS:
+            msg = "Searching & Uploading initiated..."
+        else:
+            msg = "Wrong Password! Action Denied."
     return f'''{STYLE}<div class="header"><a href="/" class="btn btn-jio" style="background:rgba(255,255,255,0.2);">BACK</a><b>YouTube Search</b></div>
-    <div style="padding:10px;">
-        <form method="POST"><input name="v_name" placeholder="Enter video name..." required><button class="btn btn-yt" style="width:100%; margin-top:5px;">FIND VIDEO</button></form>
-        {results_html}
-    </div>'''
-
-@app.route("/delete_confirm")
-def delete_confirm():
-    p = request.args.get("p")
-    return f'''{STYLE}<div class="card" style="padding:20px; text-align:center;">
-        <h3>Delete Video?</h3>
-        <p>Video: {p}</p>
-        <form action="/modify" method="GET">
-            <input type="hidden" name="t" value="delete">
-            <input type="hidden" name="p" value="{p}">
-            <input name="pass" type="password" placeholder="Enter Admin Password" required>
-            <button class="btn" style="background:#d9534f; width:100%; margin-top:10px;">CONFIRM DELETE</button>
+    <div class="card" style="padding:20px;">
+        <form method="POST">
+            <input name="v_name" placeholder="Enter video name..." required>
+            <input name="pass" type="password" placeholder="Enter Upload Password (809047)" required>
+            <button class="btn btn-yt" style="width:100%; margin-top:10px;">SEARCH & UPLOAD</button>
         </form>
+        <p style="text-align:center; color:red; font-size:12px;">{msg}</p>
     </div>'''
 
 @app.route("/rename_page")
 def rename_page():
     old = request.args.get("old")
     return f'''{STYLE}<div class="card" style="padding:20px;">
-        <h3>Rename Video</h3>
+        <h3>Secure Rename</h3>
         <form action="/modify" method="GET">
             <input type="hidden" name="t" value="rename">
             <input type="hidden" name="p" value="{old}">
             <input name="new_name" placeholder="New Name" required>
-            <button class="btn btn-jio" style="width:100%; margin-top:10px;">SAVE NAME</button>
+            <input name="pass" type="password" placeholder="Enter Password (809047)" required>
+            <button class="btn btn-jio" style="width:100%; margin-top:10px;">CONFIRM RENAME</button>
+        </form>
+    </div>'''
+
+@app.route("/delete_confirm")
+def delete_confirm():
+    p = request.args.get("p")
+    return f'''{STYLE}<div class="card" style="padding:20px; text-align:center;">
+        <h3>Secure Delete</h3>
+        <form action="/modify" method="GET">
+            <input type="hidden" name="t" value="delete">
+            <input type="hidden" name="p" value="{p}">
+            <input name="pass" type="password" placeholder="Enter Password (809047)" required>
+            <button class="btn" style="background:#d9534f; width:100%; margin-top:10px;">CONFIRM DELETE</button>
         </form>
     </div>'''
 
 @app.route("/modify")
 def modify():
     if 'u' not in session: return redirect("/login")
-    t, p = request.args.get("t"), request.args.get("p")
+    t, p, pw = request.args.get("t"), request.args.get("p"), request.args.get("pass")
+    if pw != SECURE_PASS: return redirect("/")
     try:
-        if t == "delete":
-            if request.args.get("pass") == "AtifAI12345": # Security Check
-                cloudinary.uploader.destroy(p, resource_type="video")
+        if t == "delete": cloudinary.uploader.destroy(p, resource_type="video")
         elif t == "rename":
             new_n = request.args.get("new_name")
-            cloudinary.uploader.rename(p, f"yt_vids/{new_n}", resource_type="video")
+            cloudinary.uploader.rename(p, f"{new_n}", resource_type="video")
     except: pass
     return redirect("/")
 

@@ -6,9 +6,10 @@ from pytubefix import YouTube
 import io
 
 app = Flask(__name__)
-app.secret_key = "jiotube_v96_final_routing"
+app.secret_key = "jiotube_v97_atif_master_fresh"
 
-# --- CONFIG (RULE 1, 3 & 6) ---
+# --- MASTER CONFIG (RULE 1, 3 & 6) ---
+# MongoDB aur Cloudinary setup
 MONGO_URI = "mongodb+srv://talhasaikh77_db_user:AtifAI12345@cluster0.udiyfhu.mongodb.net/Atif_AI_Database?retryWrites=true&w=majority"
 cloudinary.config(cloud_name="dawterffe", api_key="258318685843824", api_secret="NxTNXBeLmupMQ0S1FOPU9t6bcjo", secure=True)
 client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
@@ -26,10 +27,30 @@ STYLE = """<style>
     .card { background: #fff; margin:12px; border-radius:10px; overflow:hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.1); border: 1px solid #ddd; padding:10px; }
     .btn { padding:10px; border-radius:6px; text-decoration:none; color:#fff; font-size:12px; text-align:center; font-weight:bold; border:none; display:block; cursor:pointer; }
     .btn-jio { background: var(--jio); } .btn-yt { background: var(--yt); }
-    input { width:100%; padding:10px; margin:5px 0; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; }
+    input { width:100%; padding:12px; margin:5px 0; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; }
+    .thumb { width:100%; height:180px; object-fit:cover; background:#eee; }
 </style>"""
 
-# --- HOME UI (RULE 2) ---
+# --- AUTHENTICATION (RULE 1) ---
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        p, pw = request.form.get("p"), request.form.get("pw")
+        if user_col.find_one({"p": p, "pw": pw}): 
+            session['u'] = p
+            return redirect("/")
+    return f'{STYLE}<div class="card" style="margin-top:50px;"><h3>JioTube Login</h3><form method="POST"><input name="p" placeholder="Mobile Number" required><input name="pw" type="password" placeholder="Password" required><button class="btn btn-jio" style="width:100%;">LOGIN</button></form><br><a href="/signup">Naya Account Banayein</a></div>'
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if request.method == "POST":
+        p, pw = request.form.get("p"), request.form.get("pw")
+        if not user_col.find_one({"p": p}):
+            user_col.insert_one({"p": p, "pw": pw})
+            return redirect("/login")
+    return f'{STYLE}<div class="card" style="margin-top:50px;"><h3>Sign Up</h3><form method="POST"><input name="p" placeholder="Mobile Number" required><input name="pw" type="password" placeholder="Set Password" required><button class="btn btn-jio" style="width:100%;">CREATE ACCOUNT</button></form></div>'
+
+# --- HOME UI & UPLOAD PANEL (RULE 2) ---
 @app.route("/")
 def index():
     if 'u' not in session: return redirect("/login")
@@ -39,8 +60,9 @@ def index():
         vids, next_c = res.get("resources", []), res.get("next_cursor")
     except: vids, next_c = [], None
     
+    # Video List with Watch, Rename, Delete (Rule 3)
     v_html = "".join([f'''<div class="card" style="padding:0; margin-bottom:15px;">
-        <img src="{v["secure_url"].rsplit(".", 1)[0]}.jpg" style="width:100%; height:180px; object-fit:cover;">
+        <img src="{v["secure_url"].rsplit(".", 1)[0]}.jpg" class="thumb">
         <div style="padding:10px;"><b>{v["public_id"]}</b></div>
         <div style="padding:10px; display:flex; gap:5px;">
             <a href="{v["secure_url"]}" class="btn btn-jio" style="flex:2;">WATCH</a>
@@ -49,18 +71,30 @@ def index():
         </div>
     </div>''' for v in vids])
     
-    up_panel = f'''<div class="card"><b>Direct Video Downloader</b>
+    up_panel = f'''<div class="card"><b>Master Upload Panel</b>
         <form action="/start_engine" method="POST">
             <input name="url" placeholder="Paste YouTube Link" required>
-            <input name="file_name" placeholder="File Name" required>
-            <input name="pass" type="password" placeholder="Pass (809047)" required>
+            <input name="file_name" placeholder="Save As Name" required>
+            <input name="pass" type="password" placeholder="Enter Pass (809047)" required>
             <button class="btn btn-yt" style="width:100%;">DOWNLOAD TO PHONE</button>
         </form></div>'''
     
-    n_btn = f'<div style="padding:10px;"><a href="/?next={next_c}" class="btn btn-jio">NEXT PAGE</a></div>' if next_c else ""
-    return f'{STYLE}<div class="header"><b>JioTube</b><div><a href="/yt_search" class="btn btn-yt">YT</a> <a href="/pdf_home" class="btn btn-jio">PDF</a> <a href="/ai_chatter" class="btn btn-jio">AI</a></div></div>{up_panel}{v_html}{n_btn}'
+    next_btn = f'<div style="padding:10px;"><a href="/?next={next_c}" class="btn btn-jio">NEXT PAGE</a></div>' if next_c else ""
+    
+    return f'''{STYLE}
+    <div class="header">
+        <b>JioTube AI</b>
+        <div>
+            <a href="/yt_search" class="btn btn-yt" style="display:inline; padding:5px 10px;">YT</a>
+            <a href="/pdf_home" class="btn btn-jio" style="display:inline; padding:5px 10px; margin:0 5px;">PDF</a>
+            <a href="/ai_chatter" class="btn btn-jio" style="display:inline; padding:5px 10px;">JOYAS</a>
+        </div>
+    </div>
+    {up_panel}
+    {v_html}
+    {next_btn}'''
 
-# --- ROUTE PROTECTION (RULE 6: NO URL NOT FOUND) ---
+# --- ERROR PROTECTION & TOOLS (RULE 5 & 6) ---
 @app.route("/start_engine", methods=["POST"])
 def start_engine():
     url, name, pw = request.form.get("url"), request.form.get("file_name"), request.form.get("pass")
@@ -72,8 +106,8 @@ def start_engine():
             stream.stream_to_buffer(buffer)
             buffer.seek(0)
             return send_file(buffer, as_attachment=True, download_name=f"{name}.mp4", mimetype='video/mp4')
-        except Exception as e: return f"Error: {str(e)}"
-    return "Wrong Password"
+        except Exception as e: return f"Download Error: {str(e)}"
+    return "Password Galat Hai!"
 
 @app.route("/modify")
 def modify():
@@ -81,7 +115,33 @@ def modify():
     if pw == SECURE_PASS:
         if t == "delete": cloudinary.uploader.destroy(p, resource_type="video")
         elif t == "rename": cloudinary.uploader.rename(p, request.args.get("new_name"), resource_type="video")
-    return redirect("/")
+        return redirect("/")
+    return "Invalid Access"
+
+@app.route("/rename_page")
+def rename_page():
+    old = request.args.get("old")
+    return f'{STYLE}<div class="card"><h3>Rename File</h3><form action="/modify">
+    <input type="hidden" name="t" value="rename"><input type="hidden" name="p" value="{old}">
+    <input name="new_name" placeholder="New Name" required>
+    <input name="pass" type="password" placeholder="Pass (809047)" required>
+    <button class="btn btn-jio" style="width:100%;">RENAME NOW</button></form></div>'
+
+@app.route("/delete_confirm")
+def delete_confirm():
+    p = request.args.get("p")
+    return f'{STYLE}<div class="card"><h3>Confirm Delete?</h3><form action="/modify">
+    <input type="hidden" name="t" value="delete"><input type="hidden" name="p" value="{p}">
+    <input name="pass" type="password" placeholder="Pass (809047)" required>
+    <button class="btn" style="background:red; width:100%;">YES, DELETE</button></form></div>'
+
+# --- PDF LOGIC (RULE 4: 1700x1600) ---
+@app.route("/pdf_home")
+def pdf_home():
+    try: folds = cloudinary.api.subfolders("pdf_data")["folders"]
+    except: folds = []
+    f_html = "".join([f'<div class="card" style="display:flex; justify-content:space-between; align-items:center;"><b>{f["name"].upper()}</b><a href="/view_pdf?name={f["name"]}" class="btn btn-jio">OPEN</a></div>' for f in folds])
+    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">HOME</a><b>PDF Library</b></div>{f_html}'
 
 @app.route("/view_pdf")
 def view_pdf():
@@ -92,38 +152,10 @@ def view_pdf():
         <img src="https://res.cloudinary.com/dawterffe/image/upload/w_1700,h_1600,c_fill/{p["public_id"]}.jpg" style="width:100%;">
         <div style="padding:10px;"><a href="{p["secure_url"]}" download class="btn btn-jio">DOWNLOAD JPG</a></div>
     </div>''' for p in pgs])
-    n_btn = f'<a href="/view_pdf?name={n}&next={next_c}" class="btn btn-jio" style="margin:15px;">NEXT</a>' if next_c else ""
+    n_btn = f'<a href="/view_pdf?name={n}&next={next_c}" class="btn btn-jio" style="margin:15px;">NEXT PAGE</a>' if next_c else ""
     return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-jio">BACK</a><b>{n}</b></div>{h}{n_btn}'
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        p, pw = request.form.get("p"), request.form.get("pw")
-        if user_col.find_one({"p": p, "pw": pw}): session['u'] = p; return redirect("/")
-    return f'{STYLE}<div class="card" style="margin-top:50px;"><h3>Login</h3><form method="POST"><input name="p" placeholder="Mobile"><input name="pw" type="password" placeholder="Pass"><button class="btn btn-jio" style="width:100%;">LOGIN</button></form></div>'
-
-@app.route("/signup", methods=["GET", "POST"])
-def signup():
-    if request.method == "POST":
-        p, pw = request.form.get("p"), request.form.get("pw")
-        user_col.insert_one({"p": p, "pw": pw}); return redirect("/login")
-    return f'{STYLE}<div class="card" style="margin-top:50px;"><h3>Sign Up</h3><form method="POST"><input name="p" placeholder="Mobile"><input name="pw" type="password" placeholder="Set Pass"><button class="btn btn-jio" style="width:100%;">CREATE</button></form></div>'
-
-@app.route("/rename_page")
-def rename_page():
-    return f'{STYLE}<div class="card"><h3>Rename</h3><form action="/modify"><input type="hidden" name="t" value="rename"><input type="hidden" name="p" value="{request.args.get("old")}"><input name="new_name" placeholder="New Name"><input name="pass" type="password" placeholder="809047"><button class="btn btn-jio" style="width:100%;">SAVE</button></form></div>'
-
-@app.route("/delete_confirm")
-def delete_confirm():
-    return f'{STYLE}<div class="card"><h3>Delete?</h3><form action="/modify"><input type="hidden" name="t" value="delete"><input type="hidden" name="p" value="{request.args.get("p")}"><input name="pass" type="password" placeholder="809047"><button class="btn" style="background:red; width:100%;">DELETE</button></form></div>'
-
-@app.route("/pdf_home")
-def pdf_home():
-    try: folds = cloudinary.api.subfolders("pdf_data")["folders"]
-    except: folds = []
-    f_html = "".join([f'<div class="card" style="display:flex; justify-content:space-between; align-items:center;"><b>{f["name"].upper()}</b><a href="/view_pdf?name={f["name"]}" class="btn btn-jio">OPEN</a></div>' for f in folds])
-    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">HOME</a><b>Books</b></div>{f_html}'
-
+# --- AI CHATTER & YT SEARCH ---
 @app.route("/ai_chatter", methods=["GET", "POST"])
 def ai_chatter():
     if request.method == "POST":
@@ -132,14 +164,13 @@ def ai_chatter():
         return redirect("/ai_chatter")
     chats = list(chat_col.find({"u": session['u']}).sort("t", 1))
     c_html = "".join([f'<div class="card"><b>Aap:</b> {c["q"]}<br><b>Joya:</b> {c["a"]}</div>' for c in chats])
-    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">HOME</a><b>AI</b></div>{c_html}<form method="POST" style="padding:10px; position:fixed; bottom:0; width:100%; background:#eee; display:flex; gap:5px;"><input name="q" required><button class="btn btn-jio">SEND</button></form>'
+    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">HOME</a><b>AI Joya</b></div>{c_html}<form method="POST" style="padding:10px; position:fixed; bottom:0; width:100%; background:#eee; display:flex; gap:5px;"><input name="q" required placeholder="Joya se baat karein..."><button class="btn btn-jio">SEND</button></form>'
 
 @app.route("/yt_search", methods=["GET", "POST"])
 def yt_search():
-    if 'u' not in session: return redirect("/login")
     q = request.form.get("yt_query")
-    res = f'<div class="card"><a href="https://duckduckgo.com/?q={q}+youtube" target="_blank" class="btn btn-yt">Search on YT</a></div>' if q else ""
-    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">BACK</a><b>YT</b></div><div style="padding:10px;"><form method="POST"><input name="yt_query" placeholder="Video Name..."><button class="btn btn-yt" style="width:100%;">FIND</button></form>{res}</div>'
+    res = f'<div class="card"><a href="https://duckduckgo.com/?q={q}+youtube" target="_blank" class="btn btn-yt">Search YouTube</a></div>' if q else ""
+    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">BACK</a><b>YouTube Tool</b></div><div style="padding:10px;"><form method="POST"><input name="yt_query" placeholder="Video Ka Naam..."><button class="btn btn-yt" style="width:100%;">FIND</button></form>{res}</div>'
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

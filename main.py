@@ -4,9 +4,9 @@ from flask import Flask, request, redirect, render_template_string, session, url
 from pymongo import MongoClient
 
 app = Flask(__name__)
-app.secret_key = "jiotube_v92_master_secure"
+app.secret_key = "jiotube_v93_smart_engine"
 
-# --- MASTER CONFIG (RULES 1, 3 & 6) ---
+# --- CONFIG (RULES 1, 3 & 6) ---
 MONGO_URI = "mongodb+srv://talhasaikh77_db_user:AtifAI12345@cluster0.udiyfhu.mongodb.net/Atif_AI_Database?retryWrites=true&w=majority"
 cloudinary.config(cloud_name="dawterffe", api_key="258318685843824", api_secret="NxTNXBeLmupMQ0S1FOPU9t6bcjo", secure=True)
 client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
@@ -50,7 +50,7 @@ def index():
     up_panel = f'''<div class="card"><b>Secure Upload Panel</b>
         <form action="/start_engine" method="POST">
             <input name="url" placeholder="Paste Link (YouTube/Direct)" required>
-            <input name="file_name" placeholder="File Ka Naam Rakhein" required>
+            <input name="file_name" placeholder="File Name" required>
             <input name="pass" type="password" placeholder="Pass (809047)" required>
             <button class="btn btn-jio" style="width:100%;">UPLOAD TO GALLERY</button>
         </form></div>'''
@@ -58,20 +58,20 @@ def index():
     n_btn = f'<div style="padding:10px;"><a href="/?next={next_c}&q={q}" class="btn btn-jio">NEXT PAGE</a></div>' if next_c else ""
     return f'{STYLE}<div class="header"><b>JioTube</b><div><a href="/yt_search" class="btn btn-yt">YT</a> <a href="/pdf_home" class="btn btn-jio">PDF</a> <a href="/ai_chatter" class="btn btn-jio">AI</a></div></div><form style="padding:10px;"><input name="q" placeholder="Search Gallery..." value="{q}"><button class="btn btn-jio" style="width:100%;">SEARCH</button></form>{up_panel}{v_html}{n_btn}'
 
-# --- ENGINE FIX (ERROR PROTECTION RULE 6) ---
+# --- ENGINE LOGIC (RULE 6: NO URL ERRORS) ---
 @app.route("/start_engine", methods=["POST"])
 def start_engine():
     url, name, pw = request.form.get("url"), request.form.get("file_name"), request.form.get("pass")
     if pw == SECURE_PASS:
         try:
-            # Fix: Resource type auto for error handling
+            # Background Upload with auto resource detection
             cloudinary.uploader.upload(url, resource_type="auto", public_id=name if name else f"file_{int(time.time())}")
-            return f"{STYLE}<div class='card'>Success! '{name}' upload ho raha hai.<br><a href='/' class='btn btn-jio'>HOME</a></div>"
+            return f"{STYLE}<div class='card'>Success! File '{name}' upload ho rahi hai.<br><a href='/' class='btn btn-jio'>HOME</a></div>"
         except Exception as e:
-            return f"{STYLE}<div class='card'><b>Error:</b> {str(e)}<br><a href='/'>Back</a></div>"
-    return "Invalid Password"
+            return f"{STYLE}<div class='card'>Error: Link invalid ya protected hai.<br><a href='/'>BACK</a></div>"
+    return "Password Wrong!"
 
-# --- PDF (RULE 4: 1700x1600) ---
+# --- PDF LOGIC (RULE 4: 1700x1600) ---
 @app.route("/view_pdf")
 def view_pdf():
     n, curs = request.args.get("name"), request.args.get("next")
@@ -83,17 +83,6 @@ def view_pdf():
     </div>''' for p in pgs])
     n_btn = f'<a href="/view_pdf?name={n}&next={next_c}" class="btn btn-jio" style="margin:15px;">NEXT</a>' if next_c else ""
     return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-jio">BACK</a><b>{n}</b></div>{h}{n_btn}'
-
-# --- YT SEARCH & TOOLS (RULE 5) ---
-@app.route("/yt_search", methods=["GET", "POST"])
-def yt_search():
-    if 'u' not in session: return redirect("/login")
-    yt_q = request.form.get("yt_query")
-    res_box = f'<div class="card"><p>Search: <b>{yt_q}</b></p><a href="https://duckduckgo.com/?q={yt_q}+youtube" target="_blank" class="btn btn-yt">Search YouTube (Ad-Free)</a></div>' if yt_q else ""
-    return f'''{STYLE}<div class="header"><a href="/" class="btn btn-jio">BACK</a><b>Downloader</b></div>
-    <div style="padding:10px;"><form method="POST"><input name="yt_query" placeholder="Search Video Name..."><button class="btn btn-yt" style="width:100%;">SEARCH</button></form>{res_box}
-    <div class="card" style="margin-top:15px;"><form action="/start_engine" method="POST">
-    <input name="url" placeholder="Paste Link" required><input name="file_name" placeholder="Save As Name"><input name="pass" type="password" placeholder="809047"><button class="btn btn-yt" style="width:100%;">DOWNLOAD</button></form></div></div>'''
 
 # --- LOGIN/SIGNUP (MASTER GUARD) ---
 @app.route("/login", methods=["GET", "POST"])
@@ -109,6 +98,31 @@ def signup():
         p, pw = request.form.get("p"), request.form.get("pw")
         user_col.insert_one({"p": p, "pw": pw}); return redirect("/login")
     return f'{STYLE}<div class="card" style="margin-top:50px;"><h3>Sign Up</h3><form method="POST"><input name="p" placeholder="Mobile"><input name="pw" type="password" placeholder="Set Pass"><button class="btn btn-jio" style="width:100%;">CREATE</button></form></div>'
+
+# Tools and other routes (yt_search, pdf_home, ai_chatter, modify, rename, delete) follow same strict rules.
+@app.route("/yt_search", methods=["GET", "POST"])
+def yt_search():
+    if 'u' not in session: return redirect("/login")
+    q = request.form.get("yt_query")
+    res = f'<div class="card">Search results for {q}: <br><a href="https://duckduckgo.com/?q={q}+youtube" target="_blank" class="btn btn-yt">Check on YT (No Ads)</a></div>' if q else ""
+    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">BACK</a><b>YT Search</b></div><div style="padding:10px;"><form method="POST"><input name="yt_query" placeholder="Video Naam..."><button class="btn btn-yt" style="width:100%;">FIND</button></form>{res}</div>'
+
+@app.route("/pdf_home")
+def pdf_home():
+    try: folds = cloudinary.api.subfolders("pdf_data")["folders"]
+    except: folds = []
+    f_html = "".join([f'<div class="card" style="display:flex; justify-content:space-between; align-items:center;"><b>{f["name"].upper()}</b><a href="/view_pdf?name={f["name"]}" class="btn btn-jio">OPEN</a></div>' for f in folds])
+    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">HOME</a><b>Books</b></div>{f_html}'
+
+@app.route("/ai_chatter", methods=["GET", "POST"])
+def ai_chatter():
+    if request.method == "POST":
+        q = request.form.get("q"); res = model.generate_content(q)
+        chat_col.insert_one({"u": session['u'], "q": q, "a": res.text, "t": time.time()})
+        return redirect("/ai_chatter")
+    chats = list(chat_col.find({"u": session['u']}).sort("t", 1))
+    c_html = "".join([f'<div class="card"><b>Aap:</b> {c["q"]}<br><b>Joya:</b> {c["a"]}</div>' for c in chats])
+    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">HOME</a><b>AI</b></div>{c_html}<form method="POST" style="padding:10px; position:fixed; bottom:0; width:100%; background:#eee; display:flex; gap:5px;"><input name="q" required><button class="btn btn-jio">SEND</button></form>'
 
 @app.route("/modify")
 def modify():
@@ -127,23 +141,6 @@ def rename_page():
 def delete_confirm():
     p = request.args.get("p")
     return f'{STYLE}<div class="card"><h3>Delete?</h3><form action="/modify"><input type="hidden" name="t" value="delete"><input type="hidden" name="p" value="{p}"><input name="pass" type="password" placeholder="809047"><button class="btn" style="background:red; width:100%;">DELETE</button></form></div>'
-
-@app.route("/pdf_home")
-def pdf_home():
-    try: folds = cloudinary.api.subfolders("pdf_data")["folders"]
-    except: folds = []
-    f_html = "".join([f'<div class="card" style="display:flex; justify-content:space-between; align-items:center;"><b>{f["name"].upper()}</b><a href="/view_pdf?name={f["name"]}" class="btn btn-jio">OPEN</a></div>' for f in folds])
-    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">HOME</a><b>Books</b></div>{f_html}'
-
-@app.route("/ai_chatter", methods=["GET", "POST"])
-def ai_chatter():
-    if request.method == "POST":
-        q = request.form.get("q"); res = model.generate_content(q)
-        chat_col.insert_one({"u": session['u'], "q": q, "a": res.text, "t": time.time()})
-        return redirect("/ai_chatter")
-    chats = list(chat_col.find({"u": session['u']}).sort("t", 1))
-    c_html = "".join([f'<div class="card"><b>Aap:</b> {c["q"]}<br><b>Joya:</b> {c["a"]}</div>' for c in chats])
-    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">HOME</a><b>AI</b></div>{c_html}<form method="POST" style="padding:10px; position:fixed; bottom:0; width:100%; background:#eee; display:flex; gap:5px;"><input name="q" required><button class="btn btn-jio">SEND</button></form>'
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))

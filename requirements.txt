@@ -4,3 +4,4 @@ certifi
 cloudinary
 google-generativeai
 requests
+gunicorn

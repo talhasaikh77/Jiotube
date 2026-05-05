@@ -1,138 +1,130 @@
-import os, time, cloudinary, cloudinary.uploader, cloudinary.api, requests
-import google.generativeai as genai
+import os, time, cloudinary, cloudinary.uploader, cloudinary.api
 from flask import Flask, request, redirect, render_template_string, session, send_file
 from pytubefix import YouTube
-import io
+import threading
 
 app = Flask(__name__)
-app.secret_key = "jiotube_v101_no_mongodb"
+app.secret_key = "jiotube_v102_background_master"
 
-# --- MASTER CONFIG (Cloudinary & Gemini Only) ---
+# --- MASTER CONFIG ---
 cloudinary.config(cloud_name="dawterffe", api_key="258318685843824", api_secret="NxTNXBeLmupMQ0S1FOPU9t6bcjo", secure=True)
-
 SECURE_PASS = "809047"
-genai.configure(api_key="AIzaSyDtsD6jEyPXykeTsJvfkB9kk4YEqxf-mFk")
-model = genai.GenerativeModel('gemini-1.5-flash')
 
 STYLE = """<style>
     :root { --jio: #0072ef; --yt: #ff0000; }
-    body { margin:0; font-family: sans-serif; background: #f0f2f5; padding-bottom: 80px; }
-    .header { background: var(--jio); padding:15px; display:flex; justify-content:space-between; align-items:center; color:#fff; position:sticky; top:0; z-index:1000; }
+    body { margin:0; font-family: sans-serif; background: #f0f2f5; padding-bottom: 20px; }
+    .header { background: var(--jio); padding:15px; text-align:center; color:#fff; font-weight:bold; position:sticky; top:0; z-index:1000; }
     .card { background: #fff; margin:12px; border-radius:10px; overflow:hidden; box-shadow: 0 2px 6px rgba(0,0,0,0.1); border: 1px solid #ddd; padding:10px; }
     .btn { padding:10px; border-radius:6px; text-decoration:none; color:#fff; font-size:12px; text-align:center; font-weight:bold; border:none; display:block; cursor:pointer; }
     .btn-jio { background: var(--jio); } .btn-yt { background: var(--yt); }
     input { width:100%; padding:12px; margin:5px 0; border:1px solid #ccc; border-radius:6px; box-sizing:border-box; }
+    .thumb { width:100%; height:150px; object-fit:cover; background:#000; }
 </style>"""
 
-# --- HOME UI (LOGIN REMOVED - DIRECT ACCESS) ---
+# --- BACKGROUND UPLOAD LOGIC ---
+def background_upload(url, custom_name):
+    try:
+        yt = YouTube(url)
+        stream = yt.streams.filter(progressive=True, file_extension='mp4').first()
+        # Upload to Cloudinary with Jio Bharat Transformations
+        cloudinary.uploader.upload(stream.url, 
+            resource_type="video",
+            public_id=custom_name,
+            folder="JioTube_Videos",
+            eager=[
+                {"width": 320, "height": 240, "crop": "pad", "video_codec": "h264", "bit_rate": "300k"},
+                {"format": "mp4", "transformation": "sp_450p"} 
+            ],
+            eager_async=True
+        )
+    except Exception as e:
+        print(f"Background Error: {e}")
+
+# --- HOME PAGE UI ---
 @app.route("/")
 def index():
+    q = request.args.get("q")
     curs = request.args.get("next")
+    
+    # 1. Upload Panel (At the top)
+    up_panel = f'''<div class="card">
+        <h3 style="margin-top:0; color:var(--jio);">Upload to Cloud</h3>
+        <form action="/process_upload" method="POST">
+            <input name="url" placeholder="Paste Video/YT Link" required>
+            <input name="name" placeholder="Save As (Video Name)" required>
+            <button class="btn btn-jio" style="width:100%;">START CLOUD UPLOAD</button>
+        </form>
+    </div>'''
+
+    # 2. Search Engine
+    search_bar = f'''<div class="card">
+        <form action="/" method="GET">
+            <input name="q" placeholder="Search uploaded videos..." value="{q if q else ''}">
+            <button class="btn btn-yt" style="width:100%;">FIND VIDEO</button>
+        </form>
+    </div>'''
+
+    # 3. Video List (Card View)
     try:
-        res = cloudinary.api.resources(resource_type="video", type="upload", max_results=10, next_cursor=curs)
-        vids, next_c = res.get("resources", []), res.get("next_cursor")
-    except: vids, next_c = [], None
-    
-    # Video Gallery
-    v_html = "".join([f'''<div class="card" style="padding:0; margin-bottom:15px;">
-        <img src="{v["secure_url"].rsplit(".", 1)[0]}.jpg" style="width:100%; height:180px; object-fit:cover;">
-        <div style="padding:10px;"><b>{v["public_id"]}</b></div>
-        <div style="padding:10px; display:flex; gap:5px;">
-            <a href="{v["secure_url"]}" class="btn btn-jio" style="flex:2;">WATCH</a>
-            <a href="/rename_page?old={v["public_id"]}" class="btn" style="background:#f39c12; flex:1;">RENAME</a>
-            <a href="/delete_confirm?p={v["public_id"]}" class="btn" style="background:#d9534f; flex:1;">DEL</a>
-        </div>
-    </div>''' for v in vids])
-    
-    # Downloader Panel
-    up_panel = f'''<div class="card"><b>Video Downloader System</b>
-        <form action="/start_engine" method="POST">
-            <input name="url" placeholder="Paste YouTube Link" required>
-            <input name="file_name" placeholder="File Name" required>
-            <input name="pass" type="password" placeholder="Pass (809047)" required>
-            <button class="btn btn-yt" style="width:100%;">DOWNLOAD TO PHONE</button>
+        search_params = {"resource_type": "video", "type": "upload", "prefix": "JioTube_Videos/", "max_results": 10, "next_cursor": curs}
+        res = cloudinary.api.resources(**search_params)
+        vids = res.get("resources", [])
+        next_c = res.get("next_cursor")
+        
+        # Filtering if search query exists
+        if q:
+            vids = [v for v in vids if q.lower() in v['public_id'].lower()]
+
+        v_html = ""
+        for v in vids:
+            clean_name = v['public_id'].replace("JioTube_Videos/", "")
+            v_html += f'''<div class="card" style="padding:0; margin-bottom:15px;">
+                <img src="{v['secure_url'].rsplit('.', 1)[0]}.jpg" class="thumb">
+                <div style="padding:10px;">
+                    <b style="font-size:14px;">{clean_name}</b>
+                    <div style="display:flex; gap:5px; margin-top:10px;">
+                        <a href="{v['secure_url']}" class="btn btn-jio" style="flex:1;">WATCH</a>
+                        <a href="{v['secure_url']}" download class="btn" style="background:#28a745; flex:1;">DOWNLOAD</a>
+                        <a href="/delete?p={v['public_id']}" class="btn" style="background:red; width:40px;">DEL</a>
+                    </div>
+                </div>
+            </div>'''
+    except:
+        v_html = "<p style='text-align:center;'>No videos found or Error.</p>"
+        next_c = None
+
+    n_btn = f'<div style="padding:10px;"><a href="/?next={next_c}" class="btn btn-jio">LOAD MORE</a></div>' if next_c else ""
+
+    return f"{STYLE}<div class='header'>JIOTUBE CLOUD</div>{up_panel}{search_bar}{v_html}{n_btn}"
+
+# --- ROUTES ---
+@app.route("/process_upload", methods=["POST"])
+def process_upload():
+    url = request.form.get("url")
+    name = request.form.get("name")
+    # Threading use kar rahe hain taaki site band karne par bhi upload chalta rahe
+    thread = threading.Thread(target=background_upload, args=(url, name))
+    thread.start()
+    return f"{STYLE}<div class='card'><h3>Upload Started!</h3><p>Aap site band kar sakte hain. Video background mein Cloudinary par save ho rahi hai.</p><a href='/' class='btn btn-jio'>Back to Home</a></div>"
+
+@app.route("/delete")
+def delete():
+    p = request.args.get("p")
+    # Security check to prevent accidental delete
+    return f'''{STYLE}<div class="card"><h3>Delete {p}?</h3>
+        <form action="/confirm_delete">
+            <input type="hidden" name="p" value="{p}">
+            <input name="pass" type="password" placeholder="Enter 809047 to Delete" required>
+            <button class="btn" style="background:red; width:100%;">CONFIRM DELETE</button>
         </form></div>'''
-    
-    n_btn = f'<div style="padding:10px;"><a href="/?next={next_c}" class="btn btn-jio">NEXT PAGE</a></div>' if next_c else ""
-    
-    return f'''{STYLE}
-    <div class="header">
-        <b>JioTube Free</b>
-        <div>
-            <a href="/yt_search" class="btn btn-yt" style="display:inline; padding:5px 8px;">YT</a>
-            <a href="/pdf_home" class="btn btn-jio" style="display:inline; padding:5px 8px; margin:0 3px;">PDF</a>
-            <a href="/ai_chatter" class="btn btn-jio" style="display:inline; padding:5px 8px;">JOYAS</a>
-        </div>
-    </div>
-    {up_panel}{v_html}{n_btn}'''
 
-# --- DOWNLOAD ENGINE ---
-@app.route("/start_engine", methods=["POST"])
-def start_engine():
-    url, name, pw = request.form.get("url"), request.form.get("file_name"), request.form.get("pass")
+@app.route("/confirm_delete")
+def confirm_delete():
+    p, pw = request.args.get("p"), request.args.get("pass")
     if pw == SECURE_PASS:
-        try:
-            yt = YouTube(url)
-            stream = yt.streams.get_highest_resolution()
-            buffer = io.BytesIO()
-            stream.stream_to_buffer(buffer)
-            buffer.seek(0)
-            return send_file(buffer, as_attachment=True, download_name=f"{name}.mp4", mimetype='video/mp4')
-        except Exception as e: return f"Error: {str(e)}"
-    return "Wrong Pass"
-
-# --- PDF LIBRARY (1700x1600 RULE) ---
-@app.route("/pdf_home")
-def pdf_home():
-    try: folds = cloudinary.api.subfolders("pdf_data")["folders"]
-    except: folds = []
-    f_html = "".join([f'<div class="card" style="display:flex; justify-content:space-between; align-items:center;"><b>{f["name"].upper()}</b><a href="/view_pdf?name={f["name"]}" class="btn btn-jio">OPEN</a></div>' for f in folds])
-    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">HOME</a><b>Books</b></div>{f_html}'
-
-@app.route("/view_pdf")
-def view_pdf():
-    n, curs = request.args.get("name"), request.args.get("next")
-    res = cloudinary.api.resources(type="upload", prefix=f"pdf_data/{n}/", max_results=10, next_cursor=curs)
-    pgs, next_c = res.get("resources", []), res.get("next_cursor")
-    h = "".join([f'''<div class="card" style="padding:0;">
-        <img src="https://res.cloudinary.com/dawterffe/image/upload/w_1700,h_1600,c_fill/{p["public_id"]}.jpg" style="width:100%;">
-        <div style="padding:10px;"><a href="{p["secure_url"]}" download class="btn btn-jio">DOWNLOAD JPG</a></div>
-    </div>''' for p in pgs])
-    n_btn = f'<a href="/view_pdf?name={n}&next={next_c}" class="btn btn-jio">NEXT</a>' if next_c else ""
-    return f'{STYLE}<div class="header"><a href="/pdf_home" class="btn btn-jio">BACK</a><b>{n}</b></div>{h}{n_btn}'
-
-# --- AI CHATTER (STRICT NO DB LOGGING) ---
-@app.route("/ai_chatter", methods=["GET", "POST"])
-def ai_chatter():
-    ans = ""
-    if request.method == "POST":
-        q = request.form.get("q")
-        res = model.generate_content(q)
-        ans = res.text
-    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">HOME</a><b>AI Joya</b></div><div class="card"><b>Joya:</b> {ans if ans else "Mujhse kuch puchiye..."}</div><form method="POST" style="padding:10px; position:fixed; bottom:0; width:100%; background:#eee; display:flex; gap:5px;"><input name="q" required><button class="btn btn-jio">SEND</button></form>'
-
-# --- RENAME/DELETE (809047 PROTECTION) ---
-@app.route("/modify")
-def modify():
-    t, p, pw = request.args.get("t"), request.args.get("p"), request.args.get("pass")
-    if pw == SECURE_PASS:
-        if t == "delete": cloudinary.uploader.destroy(p, resource_type="video")
-        elif t == "rename": cloudinary.uploader.rename(p, request.args.get("new_name"), resource_type="video")
-    return redirect("/")
-
-@app.route("/rename_page")
-def rename_page():
-    return f'{STYLE}<div class="card"><h3>Rename</h3><form action="/modify"><input type="hidden" name="t" value="rename"><input type="hidden" name="p" value="{request.args.get("old")}"><input name="new_name" placeholder="New Name"><input name="pass" type="password" placeholder="809047"><button class="btn btn-jio" style="width:100%;">SAVE</button></form></div>'
-
-@app.route("/delete_confirm")
-def delete_confirm():
-    return f'{STYLE}<div class="card"><h3>Delete?</h3><form action="/modify"><input type="hidden" name="t" value="delete"><input type="hidden" name="p" value="{request.args.get("p")}"><input name="pass" type="password" placeholder="809047"><button class="btn" style="background:red; width:100%;">DELETE</button></form></div>'
-
-@app.route("/yt_search", methods=["GET", "POST"])
-def yt_search():
-    q = request.form.get("yt_query")
-    res = f'<div class="card"><a href="https://duckduckgo.com/?q={q}+youtube" target="_blank" class="btn btn-yt">Search on YT</a></div>' if q else ""
-    return f'{STYLE}<div class="header"><a href="/" class="btn btn-jio">BACK</a><b>YT</b></div><div style="padding:10px;"><form method="POST"><input name="yt_query" placeholder="Find video..."><button class="btn btn-yt" style="width:100%;">SEARCH</button></form>{res}</div>'
+        cloudinary.uploader.destroy(p, resource_type="video")
+        return redirect("/")
+    return "Wrong Password"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
